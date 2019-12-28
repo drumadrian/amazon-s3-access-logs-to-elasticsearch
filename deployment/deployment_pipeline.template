@@ -1,0 +1,744 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >
+  This template builds an AWS CodePipeline pipeline that implements a continuous 
+  delivery release process. This is the build pipeline for the development 
+  of the system. 
+  
+  This pipeline is also used to install this system for end users. 
+  References:
+    https://www.mikeapted.com/aws/2017/02/05/codecommit-codebuild-s3/
+
+
+
+Parameters: 
+  # Email:
+  #   Description: The email address where CodePipeline sends pipeline notifications
+  #   Type: String
+
+  # ArtifactStoreBucketName:
+  #   Description: A name for the Deployment Artifact S3 bucket
+  #   Type: String
+  #   Default: "bucket"
+
+  BranchName:
+    Description: A name for the codecommit repo Branch
+    Type: String
+    Default: "master"
+
+  GitHubRepositoryHTTPSurl:
+    Description: A https URL to clone the GitHub repo with code to deploy
+    Type: String
+    Default: "https://github.com/drumadrian/amazon-s3-access-logs-to-elasticsearch.git"
+
+  # IDName:
+  #   Description: A name for the Deployment Secret ID 
+  #   Type: String
+  #   Default: "TBD"
+
+  # SecretName:
+  #   Description: A name for the Deployment Secret 
+  #   Type: String
+  #   Default: "TBD"
+
+
+
+Resources:
+
+  # SSMstacknameparameter:
+  #   Type: "AWS::SSM::Parameter"
+  #   Properties: 
+  #     Description: This is the stackname to be used in AWS CodeBuild pipeline
+  #     Name: !Sub "${AWS::StackName}-${BranchName}"
+  #     Type: String
+  #     Value: !Sub "${AWS::StackName}"
+
+
+
+
+  ArtifactStoreBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # BucketName: !Ref ArtifactStoreBucketName      
+      VersioningConfiguration:
+        Status: Enabled
+
+
+  cleanupBucketOnDelete:
+    DependsOn: cleanupBucketOnDeleteLambda
+    Type: Custom::cleanupbucket
+    Properties:
+      ServiceToken: 
+       Fn::GetAtt: 
+          - "cleanupBucketOnDeleteLambda"
+          - "Arn"
+      BucketName: !Sub '${ArtifactStoreBucket.Arn}'
+      # BucketName: !Ref ArtifactStoreBucketName
+
+
+  cleanupBucketOnDeleteLambda:
+    DependsOn: ArtifactStoreBucket
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: !Sub |
+          #!/usr/bin/env python
+          # -*- coding: utf-8 -*-
+
+          import json
+          import boto3
+          from botocore.vendored import requests
+
+          def empty_delete_buckets(bucket_name):
+              """
+              Empties and deletes the bucket
+              :param bucket_name:
+              :param region:
+              :return:
+              """
+              print "trying to delete the bucket {0}".format(bucket_name)
+              # s3_client = SESSION.client('s3', region_name=region)
+              s3_client = boto3.client('s3')
+              # s3 = SESSION.resource('s3', region_name=region)
+              s3 = boto3.resource('s3')
+
+              try:
+                  bucket = s3.Bucket(bucket_name).load()
+              except ClientError:
+                  print "bucket {0} does not exist".format(bucket_name)
+                  return
+              # Check if versioning is enabled
+              response = s3_client.get_bucket_versioning(Bucket=bucket_name)
+              status = response.get('Status','')
+              if status == 'Enabled':
+                  response = s3_client.put_bucket_versioning(Bucket=bucket_name,
+                                                             VersioningConfiguration={'Status': 'Suspended'})
+              paginator = s3_client.get_paginator('list_object_versions')
+              page_iterator = paginator.paginate(
+                  Bucket=bucket_name
+              )
+
+              for page in page_iterator:
+                  print page
+                  if 'DeleteMarkers' in page:
+                      delete_markers = page['DeleteMarkers']
+                      if delete_markers is not None:
+                          for delete_marker in delete_markers:
+                              key = delete_marker['Key']
+                              versionId = delete_marker['VersionId']
+                              s3_client.delete_object(Bucket=bucket_name, Key=key, VersionId=versionId)
+                  if 'Versions' in page and page['Versions'] is not None:
+                      versions = page['Versions']
+                      for version in versions:
+                          print version
+                          key = version['Key']
+                          versionId = version['VersionId']
+                          s3_client.delete_object(Bucket=bucket_name, Key=key, VersionId=versionId)
+              object_paginator = s3_client.get_paginator('list_objects_v2')
+              page_iterator = object_paginator.paginate(
+                  Bucket=bucket_name
+              )
+              for page in page_iterator:
+                  if 'Contents' in page:
+                      for content in page['Contents']:
+                          key = content['Key']
+                          s3_client.delete_object(Bucket=bucket_name, Key=content['Key'])
+              #UNCOMMENT THE LINE BELOW TO MAKE LAMBDA DELETE THE BUCKET.  
+              # THIS WILL CAUSE AN FAILURE SINCE CLOUDFORMATION ALSO TRIES TO DELETE THE BUCKET
+              #s3_client.delete_bucket(Bucket=bucket_name)
+              #print "Successfully deleted the bucket {0}".format(bucket_name)
+              print "Successfully emptied the bucket {0}".format(bucket_name)
+
+
+
+          def lambda_handler(event, context):
+              try:
+                  bucket = event['ResourceProperties']['BucketName']
+                  if event['RequestType'] == 'Delete':
+                      empty_delete_buckets(bucket)
+                      #s3 = boto3.resource('s3')
+                      #bucket.objects.all().delete()
+                      #bucket = s3.Bucket(bucket)
+                      #for obj in bucket.objects.filter():
+                          #s3.Object(bucket.name, obj.key).delete()
+                  sendResponseCfn(event, context, "SUCCESS")
+              except Exception as e:
+                  print(e)
+                  sendResponseCfn(event, context, "FAILED")
+
+          def sendResponseCfn(event, context, responseStatus):
+              response_body = {'Status': responseStatus,
+                               'Reason': 'Log stream name: ' + context.log_stream_name,
+                               'PhysicalResourceId': context.log_stream_name,
+                               'StackId': event['StackId'],
+                               'RequestId': event['RequestId'],
+                               'LogicalResourceId': event['LogicalResourceId'],
+                               'Data': json.loads("{}")}
+              requests.put(event['ResponseURL'], data=json.dumps(response_body))
+
+
+      Description: cleanup Bucket on Delete Lambda Lambda function.
+      # FunctionName: lambda_function
+      Handler: index.lambda_handler
+      Role : !GetAtt cleanupBucketOnDeleteLambdaRole.Arn
+      Runtime: python2.7
+      Timeout: 60
+
+
+  cleanupBucketOnDeleteLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: !Join [ -, [!Ref 'AWS::StackName', 'cleanupBucketOnDeleteLambdaPolicy'] ]
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:*
+            - s3:*
+            Resource: '*'
+          - Effect: Deny
+            Action:
+            - s3:DeleteBucket
+            Resource: '*'
+
+
+  coderepo:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      # RepositoryName: !Ref RepositoryNameApp
+      RepositoryName: !Sub "${AWS::StackName}"
+      RepositoryDescription: "This repository holds the code that AWS CodePipeline will use to deploy."
+      # Triggers:
+      # - Name: MasterTrigger
+      #   CustomData: no custom data
+      #   DestinationArn:
+      #     Ref: CodePipelineSNSTopic
+      #   Branches:
+      #   - Master
+      #   Events:
+      #   - all
+
+
+  # CodePipelineSNSTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     Subscription:
+  #       - Endpoint: !Ref Email
+  #         Protocol: email
+
+
+  # CodePipelineSNSTopicPolicy:
+  #   Type: AWS::SNS::TopicPolicy
+  #   Properties:
+  #     Topics:
+  #       - !Ref CodePipelineSNSTopic 
+  #     PolicyDocument:
+  #       Id: Id1
+  #       Version: '2012-10-17'
+  #       Statement:
+  #       - Sid: StatementID1
+  #         Effect: Allow
+  #         Principal:
+  #           Service:
+  #           - 'events.amazonaws.com' # Allow CloudWatch Events
+  #           # - 'budgets.amazonaws.com' # Allow Budget Notifications
+  #           # - 'rds.amazonaws.com' # Allow RDS Events
+  #           # - 's3.amazonaws.com' # Allow S3 Event Notifications
+  #           # - 'lambda.amazonaws.com' # Allow S3 Event Notifications
+  #         Action: 'sns:Publish'
+  #         Resource: !Ref CodePipelineSNSTopic
+  #       - Sid: Sid2
+  #         Effect: Allow
+  #         Principal:
+  #           AWS: '*' # Allow CloudWatch Alarms, ElastiCache Notifications, Elastic Beanstalk Notifications, Auto Scaling Notification
+  #         Action: 'sns:Publish'
+  #         Resource: !Ref CodePipelineSNSTopic
+  #         Condition:
+  #           StringEquals:
+  #             'AWS:SourceOwner': !Ref 'AWS::AccountId'
+
+
+
+
+
+  SourceEvent:
+    Properties:
+      Description: Rule for Amazon CloudWatch Events to detect changes to the source repository and trigger pipeline execution
+      EventPattern:
+        source:
+        - aws.codecommit
+        detail:
+          event:
+          - referenceCreated
+          - referenceUpdated
+          referenceName:
+          - !Ref BranchName
+          referenceType:
+          - branch
+        detail-type:
+        - CodeCommit Repository State Change
+        resources:
+        - !GetAtt 'coderepo.Arn'
+      # Name: !Sub "${AWS::StackName}-SourceEvent"
+      State: ENABLED
+      Targets: 
+        - Arn: !Join
+          - ':'
+          - - arn
+            - aws
+            - codepipeline
+            - !Ref 'AWS::Region'
+            - !Ref 'AWS::AccountId'
+            - !Ref 'Pipeline'
+          Id: ProjectPipelineTarget
+          RoleArn: !GetAtt 'CodeCloudWatchRole.Arn'
+    Type: AWS::Events::Rule
+
+
+
+
+
+
+  CodeCloudWatchRole:
+    Description: IAM role to allow Amazon CloudWatch Events to trigger AWS CodePipeline execution
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - events.amazonaws.com
+          Sid: 1
+      Policies:
+      - PolicyDocument:
+          Statement:
+          - Action:
+            - codepipeline:StartPipelineExecution
+            Effect: Allow
+            Resource:
+              - !Join
+                - ':'
+                - - arn
+                  - aws
+                  - codepipeline
+                  - !Ref 'AWS::Region'
+                  - !Ref 'AWS::AccountId'
+                  - !Ref 'Pipeline'
+        PolicyName: 'TriggerPipelinePolicy'
+        # PolicyName: !Join [ -, [!Ref 'AWS::StackName', 'TriggerPipelinePolicy'] ]
+      # RoleName: !Sub "${AWS::StackName}-Role"
+    Type: AWS::IAM::Role
+
+
+
+
+
+
+
+
+
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-CodeBuildAccess"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                - '*'
+                # - 'logs:*'
+                # - 'ec2:*'
+                # - 's3:*'
+                # - 'iam:*'
+                # - 'dynamodb:*'
+                # # - 'sns:*'
+                # - 'cloudformation:*'
+                # # - 'codecommit:*'
+                # - 'events:*'
+                # - 'codebuild:*'
+                # - 'codepipeline:*'
+                # - 'cloudfront:*'
+                # - 'lambda:*'
+                # - 'sqs:*'
+                # - 'logs:*'
+                # # - 'kms:*'
+                # - 'ds:*'
+                # - 'es:*'
+                # - 'route53:*'
+                # # - 'cognito-identity:*'
+                # # - 'cognito-idp:*'
+                # - 'ecs:*'
+                # - 'ecr:*'
+                # - 'cloudwatch:*'
+                # - 'elasticloadbalancing:*'
+                Effect: Allow
+                Resource: '*'
+
+
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codepipeline.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-CodePipelineAccess"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                - 's3:*'
+                - 'cloudformation:CreateStack'
+                - 'cloudformation:DescribeStacks'
+                - 'cloudformation:DeleteStack'
+                - 'cloudformation:UpdateStack'
+                - 'cloudformation:CreateChangeSet'
+                - 'cloudformation:ExecuteChangeSet'
+                - 'cloudformation:DeleteChangeSet'
+                - 'cloudformation:DescribeChangeSet'
+                - 'cloudformation:SetStackPolicy'
+                - 'iam:PassRole'
+                - 'sns:Publish'
+                - 'codecommit:*'
+                - 'codebuild:*'
+                Effect: Allow
+                Resource: '*'
+
+
+
+
+############################################################################################################
+#  BEGIN CodePipeline Definition
+############################################################################################################
+
+
+
+
+
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Location: !Ref 'ArtifactStoreBucket'
+        Type: S3
+      DisableInboundStageTransitions: []
+      Name: !Sub "${AWS::StackName}"
+      RoleArn: !GetAtt [PipelineRole, Arn]
+      Stages:
+
+        - Name: Fetch_Source
+          Actions:
+            - Name: SourceCode
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+              Configuration:
+                BranchName: !Ref BranchName 
+                PollForSourceChanges: false
+                # RepositoryName: !Ref RepositoryNameApp
+                # RepositoryName: Fn::GetAtt: [ coderepo, Name ]
+                RepositoryName: !GetAtt coderepo.Name
+              OutputArtifacts:
+                - Name: code
+              RunOrder: '1'
+
+
+        # - Name: Confirm_Source_Code_Source
+        #   Actions:
+        #     - Name: Use_local_OR_Cloned_code
+        #       ActionTypeId:
+        #         Category: Build
+        #         Owner: AWS
+        #         Provider: CodeBuild
+        #         Version: '1'
+        #       InputArtifacts:
+        #         - Name: code
+        #       Configuration:
+        #         ProjectName: !Ref UselocalORClonedcode
+        #       RunOrder: '1'
+        #       OutputArtifacts:
+        #         - Name: output-Use_local_OR_Cloned_code
+
+        - Name: Build_and_Deploy_System
+          Actions:
+            - Name: SAM_Build_and_SAM_Deploy
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              InputArtifacts:
+                - Name: code
+              Configuration:
+                ProjectName: !Ref SAMBuildandSAMDeploy
+              RunOrder: '1'
+              OutputArtifacts:
+                - Name: output-SAM_Build_and_SAM_Deploy
+
+        - Name: Run_Tests
+          Actions:
+            - Name: Test_S3_Bucket_Notification
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              InputArtifacts:
+                - Name: output-SAM_Build_and_SAM_Deploy
+              Configuration:
+                ProjectName: !Ref TestS3BucketNotification
+              RunOrder: '1'
+              OutputArtifacts:
+                - Name: output-Test_Log_Bucket_Notification
+
+
+
+############################################################################################################
+#  END CodePipeline Definition
+############################################################################################################
+
+
+  StartAWSinstaller:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Artifacts:
+        Type: NO_ARTIFACTS
+      # BadgeEnabled: false
+      Description: CodeBuild that will Clone from GitHub and push to CodeCommit to start Code Pipeline 
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/python:3.6.5
+        Type: LINUX_CONTAINER
+      # Name:
+      #   Ref: MyCodeBuildProjectName
+      ServiceRole: !Ref CodeBuildRole
+      TimeoutInMinutes: 30
+      Source:
+        # Location: !GetAtt [coderepo, CloneUrlHttp]
+        Type: NO_SOURCE
+        BuildSpec: !Sub |
+          version: 0.2
+          phases:
+            install:
+              commands:
+                - pwd
+                - ls -al
+                - pip install --upgrade pip
+                - pip install -U boto3
+                - apt-get install git
+                - git config --global user.name StartAWSinstallerUser
+                - git config --global credential.helper '!aws codecommit credential-helper $@'
+                - git config --global credential.UseHttpPath true
+            build:
+              commands:
+                - ls -al
+                - git clone ${GitHubRepositoryHTTPSurl}
+                - ls -al
+                - cd amazon-s3-access-logs-to-elasticsearch/
+                - ls -al
+                - pwd
+                - git checkout ${BranchName}
+                - pwd
+                - ls -al
+                - git remote -v
+                - git remote add aws ${coderepo.CloneUrlHttp}
+                - git remote -v
+                - git push aws ${BranchName}
+                - ls -al
+            post_build:
+              commands:
+                - echo ***** Build completed *****
+                - echo ***** Code retried from ${GitHubRepositoryHTTPSurl} *****
+                - echo ***** Code was pushed to ${coderepo.CloneUrlHttp} *****
+
+
+
+
+  SAMBuildandSAMDeploy:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      # BadgeEnabled: false
+      Description: CodeBuild that will use SAM to Build and Deploy the applicaiton 
+      # Name:
+      #   Ref: MyCodeBuildProjectName
+      ServiceRole: !Ref CodeBuildRole
+      TimeoutInMinutes: 30
+      Source:
+        BuildSpec: deployment/buildspec_SAM_Build_and_SAM_Deploy.yaml
+        GitCloneDepth: 0
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/python:3.6.5
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: codecommithttpsname
+            Value: !GetAtt coderepo.Name
+            Type: PLAINTEXT
+          - Name: codecommithttpsurl
+            Value: !GetAtt coderepo.CloneUrlHttp
+            Type: PLAINTEXT
+          - Name: deploymentartifactstorebucketname
+            Value: !Ref 'ArtifactStoreBucket'
+            Type: PLAINTEXT
+          - Name: APP_STACK_NAME
+            Value: !Sub "${AWS::StackName}"
+            Type: PLAINTEXT
+          # - Name: codepipelinesnstopicarn
+          #   Value: !Ref CodePipelineSNSTopic
+          #   Type: PLAINTEXT
+          # - Name: codepipelinebranchname
+          #   Value: !Ref BranchName
+          #   Type: PLAINTEXT
+          # - Name: idname
+          #   Value: !Ref IDName
+          #   Type: PARAMETER_STORE
+          # - Name: secretidname
+          #   Value: !Ref SecretName
+          #   Type: PARAMETER_STORE
+
+
+
+
+
+  TestS3BucketNotification:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      # BadgeEnabled: false
+      Description: CodeBuild that will put an obect in the S3 bucket to test the applicaiton 
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/python:3.6.5
+        Type: LINUX_CONTAINER
+      # Name:
+      #   Ref: MyCodeBuildProjectName
+      ServiceRole: !Ref CodeBuildRole
+      TimeoutInMinutes: 30
+      Source:
+        BuildSpec: deployment/buildspec_Test_S3_Bucket_Notification.yaml
+        GitCloneDepth: 0
+        Type: CODEPIPELINE
+
+
+############################################################################################################
+############################################################################################################
+
+
+
+
+
+
+  # SSMparametercodebranchname:
+  #   Type: "AWS::SSM::Parameter"
+  #   Properties: 
+  #     Description: The branch name of the code from the AWS CodeCommit Repository
+  #     Name: !Sub "${AWS::StackName}-SSMparametercodebranchname"
+  #     Type: String
+  #     Value: !Ref BranchName
+
+
+  # SSMparametercoderepoURL:
+  #   Type: "AWS::SSM::Parameter"
+  #   Properties: 
+  #     Description: The URL of the AWS CodeCommit Repository
+  #     Name: !Sub "${AWS::StackName}-coderepoURL"
+  #     Type: String
+  #     Value: !GetAtt coderepo.CloneUrlHttp
+
+
+  # SSMparametercodecommitrepositoryname:
+  #   Type: "AWS::SSM::Parameter"
+  #   Properties: 
+  #     Description: The Name of the AWS CodeCommit Repository
+  #     Name: !Sub "${AWS::StackName}-codecommitrepositoryname"
+  #     Type: String
+  #     Value: !GetAtt coderepo.Name
+
+  # SSMparameterpipelinename:
+  #   Type: "AWS::SSM::Parameter"
+  #   Properties: 
+  #     Description: The Pipeline name of the build pipeline.  This matches the StackName of the build pipeline stack that creates everything
+  #     Name: !Sub "${AWS::StackName}-stackname"
+  #     Type: String
+  #     Value: !Sub "${AWS::StackName}"
+
+  # SSMparametercodeSNStopicName:
+  #   Type: "AWS::SSM::Parameter"
+  #   Properties: 
+  #     Description: The topic name of the shared SNS topic 
+  #     Name: !Sub "${AWS::StackName}-SSMparametercodeSNStopicName"
+  #     Type: String
+  #     Value: !Ref CodePipelineSNSTopic
+
+  # SSMparametercodeSNStopicARN:
+  #   Type: "AWS::SSM::Parameter"
+  #   Properties: 
+  #     Description: The topic name of the shared SNS topic 
+  #     Name: !Sub "${AWS::StackName}-SSMparametercodeSNStopicARN"
+  #     Type: String
+  #     Value: !Ref CodePipelineSNSTopic
+
+
+  # SSMparametercodeSNStopicEMAIL:
+  #   Type: "AWS::SSM::Parameter"
+  #   Properties: 
+  #     Description: The topic name of the shared SNS topic 
+  #     Name: !Sub "${AWS::StackName}-SSMparametercodeSNStopicEMAIL"
+  #     Type: String
+  #     Value: !Ref Email
+
+
+
+
+
+Outputs:
+
+  ArtifactStoreBucket:
+    Description: The name of the AWS S3 deployment bucket
+    Value: !Ref ArtifactStoreBucket
+
+
+  coderepoURL:
+    Description: The URL of the AWS CodeCommit Repository
+    Value: !GetAtt coderepo.CloneUrlHttp
+
+
+  coderepoName:
+    Description: The Name of the AWS CodeCommit Repository
+    Value: !GetAtt coderepo.Name
+
+
+

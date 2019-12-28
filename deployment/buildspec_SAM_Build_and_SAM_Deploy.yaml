@@ -1,0 +1,68 @@
+########################################################################################################
+########################################################################################################
+#
+#     Just run this file over and over
+#
+#
+########################################################################################################
+########################################################################################################
+
+# Notes:
+
+# https://docs.aws.amazon.com/cli/latest/reference/cloudformation/create-stack.html
+# https://docs.aws.amazon.com/cli/latest/reference/codebuild/start-build.html
+
+
+version: 0.2
+
+env:
+  variables:
+    key1: "value1"
+    key2: "value2"
+phases:
+  install:
+    commands:
+      - echo no install necessary
+      # - command
+
+  pre_build:
+    commands:
+      - pwd
+      - ls -al 
+      - echo $CODEBUILD_INITIATOR
+      - CODEBUILD_INITIATOR_SERVICE="$(echo $CODEBUILD_INITIATOR | cut -d'/' -f1)"
+      - CODEBUILD_INITIATOR_NAME="$(echo $CODEBUILD_INITIATOR | cut -d'/' -f2)"
+      - echo $CODEBUILD_INITIATOR_NAME
+      - PIPELINENAME=$CODEBUILD_INITIATOR_NAME
+      - echo PIPELINENAME=
+      - echo $PIPELINENAM
+      
+      - REGION=$(aws configure get region)
+      - SAM_APP_STACK_NAME=$APP_STACK_NAME-app
+      - cd sam-app/
+      - sam validate --debug
+      - SAM_APP_STACK_FINALIZER_PROJECT_NAME=$SAM_APP_STACK_NAME-Finalizer
+
+
+  build:
+    commands:
+      - sam build --debug
+      - sam deploy --stack-name $SAM_APP_STACK_NAME --region $REGION --no-fail-on-empty-changeset --debug
+      - aws codebuild start-build --project-name $SAM_APP_STACK_FINALIZER_PROJECT_NAME 
+
+
+  post_build:
+    commands:
+      # - sam deploy --stack-name $SAM_APP_STACK_NAME --region $REGION --debug
+      - echo ***** Final Deployment of logmydata application completed *****
+
+
+
+
+
+
+
+
+
+
+

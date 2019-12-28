@@ -1,0 +1,234 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+    sam-app
+
+    Sample SAM Template for sam-app converted into S3 access log processing function
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+    Function:
+        Timeout: 60
+
+Parameters:
+
+    IAMUsername:
+        Description: Name of the IAM user who will be the administrator of the KMS key we create. This user will be able to encrypt values and manage the key.
+        Type: String
+        Default: root
+
+
+Resources:
+
+    logmydataFunction:
+        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+        Properties:
+            CodeUri: logmydata/
+            Handler: logmydata.lambda_handler
+            Runtime: python3.7
+            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+                Variables:
+                    cloud_id: '-'
+                    http_auth_username: '-'
+                    http_auth_password: '-'
+                    index_name: '-'
+                    AWS_XRAY_TRACING_NAME: 'logmydataFunction'
+            Events:
+                S3AccessLogEvent:
+                    Type: S3
+                    Properties:
+                        Bucket: 
+                            Ref: logmydataFunctionBucket
+                        Events: s3:ObjectCreated:*
+
+
+
+
+
+    # cloud_idCredentialParameter:
+    #     Properties:
+    #         Description: Parameter Store Credential for cloud_id
+    #         Name: /logmydata/cloud_id
+    #         Type: String
+    #         Value: 'notset'
+    #     Type: AWS::SSM::Parameter
+
+    
+
+    ParameterStoreEncryptionKeyAlias:
+        Type: AWS::KMS::Alias
+        Properties:
+            AliasName: 'alias/ParameterStoreEncryptionKey'
+            TargetKeyId: !Ref ParameterStoreEncryptionKey
+
+    ParameterStoreEncryptionKey:
+        Type: AWS::KMS::Key
+        Properties:
+            Description: 'Encryption key for secret config values for S3 Access log Lambda function'
+            Enabled: True
+            EnableKeyRotation: False
+            KeyPolicy:
+                Version: '2012-10-17'
+                Id: 'key-default-1'
+                Statement:
+                  -
+                    Sid: 'Allow administration of the key & encryption of new values'
+                    Effect: Allow
+                    Principal:
+                      AWS:
+                        - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+                    Action:
+                      - 'kms:Create*'
+                      - 'kms:Encrypt'
+                      - 'kms:Describe*'
+                      - 'kms:Enable*'
+                      - 'kms:List*'
+                      - 'kms:Put*'
+                      - 'kms:Update*'
+                      - 'kms:Revoke*'
+                      - 'kms:Disable*'
+                      - 'kms:Get*'
+                      - 'kms:Delete*'
+                      - 'kms:ScheduleKeyDeletion'
+                      - 'kms:CancelKeyDeletion'
+                    Resource: '*'
+                  -
+                    Sid: 'Allow use of the key'
+                    Effect: Allow
+                    Principal:
+                      AWS: !GetAtt logmydataFunctionRole.Arn
+                    Action:
+                      - 'kms:Encrypt'
+                      - 'kms:Decrypt'
+                      - 'kms:ReEncrypt*'
+                      - 'kms:GenerateDataKey*'
+                      - 'kms:DescribeKey'
+                    Resource: '*'
+    
+
+
+
+    logmydataFunctionBucket:
+        Type: AWS::S3::Bucket
+        # Properties:
+        #     NotificationConfiguration:
+        #         LambdaConfigurations:
+        #             - Function: logmydataFunction
+        #                 Event: s3:ObjectCreated:*
+        # DependsOn:
+        #     - logmydataFunctionS3BucketEventPermission
+    
+    
+    finalDeploymentConfig:
+        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+        Properties:
+            CodeUri: finaldeploymentconfig/
+            Handler: logmydata.lambda_handler
+            Runtime: python3.7
+            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+                Variables:
+                    s3bucket: !Ref logmydataFunctionBucket
+                    lambdafunction: !Ref logmydataFunction
+
+
+    
+    Finalizer:
+        Type: "AWS::CodeBuild::Project"
+        Properties:
+            Name: !Sub '${AWS::StackName}-Finalizer'
+            Artifacts:
+                Type: NO_ARTIFACTS
+                # BadgeEnabled: false
+            Description: CodeBuild that will Clone from GitHub and push to CodeCommit to start Code Pipeline 
+            Environment:
+                ComputeType: BUILD_GENERAL1_SMALL
+                Image: aws/codebuild/python:3.6.5
+                Type: LINUX_CONTAINER
+            ServiceRole: !Ref CodeBuildRole
+            TimeoutInMinutes: 30
+            Source:
+                # Location: !GetAtt [coderepo, CloneUrlHttp]
+                Type: NO_SOURCE
+                BuildSpec: !Sub |
+                    version: 0.2
+                    phases:
+                    install:
+                      commands:
+                        - pwd
+                        - ls -al
+                        - pip install --upgrade pip
+                        - pip install -U boto3
+                        - logbucketname=${logmydataFunctionBucket}
+                        - loglabmdaarn=${logmydataFunction.Arn}
+                        - echo logbucketname=$logbucketname
+                        - echo loglabmdaarn=$loglabmdaarn
+                        - touch notification.json
+                        - notification='{
+                            "LambdaFunctionConfigurations": [
+                                {
+                                  "Id": "my-lambda-function-s3-event-configuration",
+                                  "LambdaFunctionArn": "arn:aws:lambda:us-west-2:696965430582:function:logmydata-app-3-logmydataFunction-1S9IU2I45QMB7",
+                                  "Events": [ "s3:ObjectCreated:*" ]
+                                }
+                              ]
+                            }'
+                        - echo $notification > notification.json
+                        - cat notification.json
+                        - aws s3api put-bucket-notification-configuration --bucket logmydata-app-3-logmydatafunctionbucket-dhaqa3gsdnhb --notification-configuration file://notification.json
+                    build:
+                      commands:
+                        - ls -al
+                        - echo 'create Amazon S3 bucket notification' 
+                        - aws s3api put-bucket-notification-configuration --bucket $logbucketname --notification-configuration file://notification.json
+
+                        - ls -al
+                    post_build:
+                      commands:
+                        - echo ***** Final step of logmydata SAM application completed *****
+                        - echo ***** Finalizer execution complete *****
+
+
+    CodeBuildRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Action: ['sts:AssumeRole']
+                      Effect: Allow
+                      Principal:
+                        Service: [codebuild.amazonaws.com]
+
+    CodeBuildRolePolicy: 
+        Type: "AWS::IAM::Policy"
+        Properties: 
+            PolicyName: !Sub "${AWS::StackName}-CodeBuildRolePolicy"
+            PolicyDocument: 
+                Version: "2012-10-17"
+                Statement: 
+                    - Effect: "Allow"
+                      Action: 
+                            - "s3:*"
+                      Resource: "*"
+            Roles: 
+                - Ref: "CodeBuildRole"
+
+
+
+Outputs:
+
+    # HelloWorldApi:
+    #   Description: "API Gateway endpoint URL for Prod stage for Hello World function"
+    #   Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
+
+    logmydataFunction:
+      Description: "logmydataFunction Lambda Function ARN"
+      Value: !GetAtt logmydataFunction.Arn
+
+    logmydataFunctionIamRole:
+      Description: "Implicit IAM Role created for logmydataFunction function"
+      Value: !GetAtt logmydataFunctionRole.Arn
+
+    logmydataFunctionIamRole:
+      Description: "Implicit IAM Role created for logmydataFunction function"
+      Value: !GetAtt logmydataFunctionRole.Arn
+Transform: AWS::Serverless-2016-10-31
