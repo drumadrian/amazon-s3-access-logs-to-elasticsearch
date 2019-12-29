@@ -600,6 +600,7 @@ Resources:
         Type: CODEPIPELINE
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
+        PrivilegedMode: true
         Image: aws/codebuild/python:3.6.5
         Type: LINUX_CONTAINER
         EnvironmentVariables:
