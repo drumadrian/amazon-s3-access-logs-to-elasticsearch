@@ -15,8 +15,11 @@ from tempfile import NamedTemporaryFile
 import traceback
 # import os, traceback, json, boto3
 
-from aws_xray_sdk.core import patch_all
-patch_all()
+# from aws_xray_sdk.core import patch_all
+from aws_xray_sdk import core
+# from aws_xray_sdk import patch_all
+core.patch_all()
+# patch_all()
 
 # Notes:
 # https://docs.aws.amazon.com/code-samples/latest/catalog/python-s3-get_object.py.html
@@ -36,36 +39,37 @@ print('Loading function')
 client = boto3.client('ssm')
 s3 = boto3.client('s3')
 
-cloud_id_var = os.getenv('cloud_id')
-http_auth_username = os.getenv('http_auth_username')
-http_auth_password = os.getenv('http_auth_password')
-index_name = os.getenv('index_name')
 
 
 def lambda_handler(event, context):
     print("Received event: " + json.dumps(event, indent=2))
+
+    cloud_id_var = os.getenv('cloud_id')
+    http_auth_username = os.getenv('http_auth_username')
+    http_auth_password = os.getenv('http_auth_password')
+    index_name = os.getenv('index_name')
 
 
     try:
         # Get all parameters for this app is not set using environment variables
 
         param_details = client.get_parameter(Name='/logmydata/cloud_id',WithDecryption=True)
-        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and cloud_id_var is not "-":
+        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and cloud_id_var is "-":
             for param in param_details.get('Parameter'):
                 cloud_id_var = param.get('Value')
 
         param_details = client.get_parameter(Name='/logmydata/http_auth_username',WithDecryption=True)
-        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and http_auth_username is not "-":
+        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and http_auth_username is "-":
             for param in param_details.get('Parameter'):
                 http_auth_username = param.get('Value')
 
         param_details = client.get_parameter(Name='/logmydata/http_auth_password',WithDecryption=True)
-        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and http_auth_password is not "-":
+        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and http_auth_password is "-":
             for param in param_details.get('Parameter'):
                 http_auth_password = param.get('Value')
 
         param_details = client.get_parameter(Name='/logmydata/index_name',WithDecryption=True)
-        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and index_name is not "-":
+        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and index_name is "-":
             for param in param_details.get('Parameter'):
                 index_name = param.get('Value')
 

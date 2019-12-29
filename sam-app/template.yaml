@@ -22,6 +22,7 @@ Resources:
     logmydataFunction:
         Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
         Properties:
+            Role: !GetAtt logmydataFunctionRole.Arn
             CodeUri: logmydata/
             Handler: logmydata.lambda_handler
             Runtime: python3.7
@@ -41,6 +42,34 @@ Resources:
                         Events: s3:ObjectCreated:*
 
 
+
+    logmydataFunctionRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Action: ['sts:AssumeRole']
+                      Effect: Allow
+                      Principal:
+                        Service: [lambda.amazonaws.com]
+
+
+    logmydataFunctionRolePolicy: 
+        Type: "AWS::IAM::Policy"
+        Properties: 
+            PolicyName: !Sub "${AWS::StackName}-logmydataFunctionRolePolicy"
+            PolicyDocument: 
+                Version: "2012-10-17"
+                Statement: 
+                    - Effect: "Allow"
+                      Action: 
+                            - "s3:*"
+                            - "ssm:*"
+                            - "kms:*"
+                      Resource: "*"
+            Roles: 
+                - Ref: "logmydataFunctionRole"
 
 
 
@@ -103,7 +132,7 @@ Resources:
                       - 'kms:GenerateDataKey*'
                       - 'kms:DescribeKey'
                     Resource: '*'
-    
+        
 
 
 
@@ -118,17 +147,6 @@ Resources:
         #     - logmydataFunctionS3BucketEventPermission
     
     
-    finalDeploymentConfig:
-        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-        Properties:
-            CodeUri: finaldeploymentconfig/
-            Handler: logmydata.lambda_handler
-            Runtime: python3.7
-            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
-                Variables:
-                    s3bucket: !Ref logmydataFunctionBucket
-                    lambdafunction: !Ref logmydataFunction
-
 
     
     Finalizer:
@@ -138,53 +156,42 @@ Resources:
             Artifacts:
                 Type: NO_ARTIFACTS
                 # BadgeEnabled: false
-            Description: CodeBuild that will Clone from GitHub and push to CodeCommit to start Code Pipeline 
+            Description: CodeBuild project that will create SSM Secure parameters  
             Environment:
                 ComputeType: BUILD_GENERAL1_SMALL
                 Image: aws/codebuild/python:3.6.5
                 Type: LINUX_CONTAINER
             ServiceRole: !Ref CodeBuildRole
-            TimeoutInMinutes: 30
+            TimeoutInMinutes: 10
             Source:
                 # Location: !GetAtt [coderepo, CloneUrlHttp]
                 Type: NO_SOURCE
                 BuildSpec: !Sub |
                     version: 0.2
                     phases:
-                    install:
-                      commands:
-                        - pwd
-                        - ls -al
-                        - pip install --upgrade pip
-                        - pip install -U boto3
-                        - logbucketname=${logmydataFunctionBucket}
-                        - loglabmdaarn=${logmydataFunction.Arn}
-                        - echo logbucketname=$logbucketname
-                        - echo loglabmdaarn=$loglabmdaarn
-                        - touch notification.json
-                        - notification='{
-                            "LambdaFunctionConfigurations": [
-                                {
-                                  "Id": "my-lambda-function-s3-event-configuration",
-                                  "LambdaFunctionArn": "arn:aws:lambda:us-west-2:696965430582:function:logmydata-app-3-logmydataFunction-1S9IU2I45QMB7",
-                                  "Events": [ "s3:ObjectCreated:*" ]
-                                }
-                              ]
-                            }'
-                        - echo $notification > notification.json
-                        - cat notification.json
-                        - aws s3api put-bucket-notification-configuration --bucket logmydata-app-3-logmydatafunctionbucket-dhaqa3gsdnhb --notification-configuration file://notification.json
-                    build:
-                      commands:
-                        - ls -al
-                        - echo 'create Amazon S3 bucket notification' 
-                        - aws s3api put-bucket-notification-configuration --bucket $logbucketname --notification-configuration file://notification.json
-
-                        - ls -al
-                    post_build:
-                      commands:
-                        - echo ***** Final step of logmydata SAM application completed *****
-                        - echo ***** Finalizer execution complete *****
+                        install:
+                          commands:
+                            - pwd
+                            - ls -al
+                            - pip install --upgrade pip
+                            - pip install -U boto3
+                            - logbucketname=${logmydataFunctionBucket}
+                            - loglabmdaarn=${logmydataFunction.Arn}
+                            - echo logbucketname=$logbucketname
+                            - echo loglabmdaarn=$loglabmdaarn
+                            - touch notification.json
+                        build:
+                          commands:
+                            - ls -al
+                            - echo 'Now adding 4 secure parameters using KMS key'
+                            - aws ssm put-parameter --name "/logmydata/cloud_id" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}"
+                            - aws ssm put-parameter --name "/logmydata/http_auth_username" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}"
+                            - aws ssm put-parameter --name "/logmydata/http_auth_password" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}"
+                            - aws ssm put-parameter --name "/logmydata/index_name" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}"
+                        post_build:
+                          commands:
+                            - echo ***** Final step of logmydata SAM application completed *****
+                            - echo ***** Finalizer execution complete *****
 
 
     CodeBuildRole:
@@ -208,6 +215,9 @@ Resources:
                     - Effect: "Allow"
                       Action: 
                             - "s3:*"
+                            - "ssm:**"
+                            - "logs:*"
+                            - "kms:*"
                       Resource: "*"
             Roles: 
                 - Ref: "CodeBuildRole"
