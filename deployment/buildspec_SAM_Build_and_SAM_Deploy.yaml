@@ -29,15 +29,7 @@ phases:
     commands:
       - pwd
       - ls -al 
-      - echo $CODEBUILD_INITIATOR
-      - CODEBUILD_INITIATOR_SERVICE="$(echo $CODEBUILD_INITIATOR | cut -d'/' -f1)"
-      - CODEBUILD_INITIATOR_NAME="$(echo $CODEBUILD_INITIATOR | cut -d'/' -f2)"
-      - echo $CODEBUILD_INITIATOR_NAME
-      - PIPELINENAME=$CODEBUILD_INITIATOR_NAME
-      - echo PIPELINENAME=
-      - echo $PIPELINENAM
-      
-      - REGION=$(aws configure get region)
+      # - REGION=$(aws configure get region)
       - SAM_APP_STACK_NAME=$APP_STACK_NAME-app
       - cd sam-app/
       - sam validate --debug
@@ -47,7 +39,7 @@ phases:
   build:
     commands:
       - sam build --debug
-      - sam deploy --stack-name $SAM_APP_STACK_NAME --region $REGION --no-fail-on-empty-changeset --debug
+      - sam deploy --stack-name $SAM_APP_STACK_NAME --region $AWS_DEFAULT_REGION --no-fail-on-empty-changeset --debug
       - aws codebuild start-build --project-name $SAM_APP_STACK_FINALIZER_PROJECT_NAME 
 
 
