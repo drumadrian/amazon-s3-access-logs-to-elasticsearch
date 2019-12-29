@@ -23,6 +23,7 @@ phases:
   install:
     commands:
       # - sudo apt-get update
+      - sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)"
       - brew tap aws/tap
       - brew install aws-sam-cli
       
