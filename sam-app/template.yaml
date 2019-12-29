@@ -3,6 +3,7 @@ Description: >
     sam-app
 
     Sample SAM Template for sam-app converted into S3 access log processing function
+    After you enable server access logging, it might take a few hours before the logs are delivered to the target bucket. 
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
