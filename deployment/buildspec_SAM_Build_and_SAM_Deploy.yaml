@@ -22,7 +22,10 @@ env:
 phases:
   install:
     commands:
-      - echo no install necessary
+      # - sudo apt-get update
+      - brew tap aws/tap
+      - brew install aws-sam-cli
+      
       # - command
 
   pre_build:
