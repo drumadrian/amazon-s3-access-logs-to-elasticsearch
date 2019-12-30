@@ -24,6 +24,8 @@ phases:
     commands:
       # - sudo apt-get update
       - whoami
+      - sam --version
+      - brew upgrade aws-sam-cli
       
       # - INSTALL HOMEBREW 
       # - true || sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)"
@@ -41,14 +43,14 @@ phases:
       # - REGION=$(aws configure get region)
       - SAM_APP_STACK_NAME=$APP_STACK_NAME-app
       - cd sam-app/
-      - sam validate --debug
+      - sam validate --template template.yaml --debug
       - SAM_APP_STACK_FINALIZER_PROJECT_NAME=$SAM_APP_STACK_NAME-Finalizer
 
 
   build:
     commands:
-      - sam build --debug
-      - sam deploy --stack-name $SAM_APP_STACK_NAME --region $AWS_DEFAULT_REGION --no-fail-on-empty-changeset --debug
+      - sam build --template template.yaml --debug
+      - sam deploy --template template.yaml --stack-name $SAM_APP_STACK_NAME --region $AWS_DEFAULT_REGION --no-fail-on-empty-changeset --debug
       - aws codebuild start-build --project-name $SAM_APP_STACK_FINALIZER_PROJECT_NAME 
 
 
