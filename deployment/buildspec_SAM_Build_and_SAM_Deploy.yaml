@@ -50,8 +50,10 @@ phases:
   build:
     commands:
       - sam build --template template.yaml --debug
-      - sam deploy --template template.yaml --stack-name $SAM_APP_STACK_NAME --region $AWS_DEFAULT_REGION --no-fail-on-empty-changeset --debug
-      - aws codebuild start-build --project-name $SAM_APP_STACK_FINALIZER_PROJECT_NAME 
+      - y | sam deploy -g 
+      - sam deploy --stack-name $SAM_APP_STACK_NAME --region $AWS_DEFAULT_REGION --no-fail-on-empty-changeset --debug
+      # - sam deploy --template template.yaml --stack-name $SAM_APP_STACK_NAME --region $AWS_DEFAULT_REGION --no-fail-on-empty-changeset --debug
+      # - aws codebuild start-build --project-name $SAM_APP_STACK_FINALIZER_PROJECT_NAME 
 
 
   post_build:
