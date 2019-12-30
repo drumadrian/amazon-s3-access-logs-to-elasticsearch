@@ -44,7 +44,7 @@ phases:
       - cd sam-app/
       - ls -al
       - echo $RANDOM
-      - $$APP_STACK_BUCKET_NAME=$APP_STACK_NAME-$RANDOM
+      - $APP_STACK_BUCKET_NAME=$APP_STACK_NAME-$RANDOM
       - sam validate --template template.yaml --debug
       # - SAM_APP_STACK_FINALIZER_PROJECT_NAME=$SAM_APP_STACK_NAME-Finalizer
 
