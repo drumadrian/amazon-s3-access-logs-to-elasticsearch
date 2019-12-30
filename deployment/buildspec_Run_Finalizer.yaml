@@ -1,0 +1,47 @@
+########################################################################################################
+########################################################################################################
+#
+#     Just run this file over and over
+#
+#
+########################################################################################################
+########################################################################################################
+
+# Notes:
+
+# https://docs.aws.amazon.com/cli/latest/reference/cloudformation/create-stack.html
+#  
+
+
+version: 0.2
+
+env:
+  variables:
+    key1: "value1"
+    key2: "value2"
+phases:
+  install:
+    commands:
+      - echo no install necessary
+      # - command
+
+
+  build:
+    commands:
+      - aws codebuild start-build --project-name $FINALIZER_PROJECT_NAME
+
+  post_build:
+    commands:
+      - echo Finalizer completed on `date`
+      # - command
+
+
+
+
+
+
+
+
+
+
+
