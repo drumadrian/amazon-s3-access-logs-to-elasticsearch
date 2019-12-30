@@ -507,23 +507,23 @@ Resources:
                 ProjectName: !Ref SAMBuildandSAMDeploy
               RunOrder: '1'
               OutputArtifacts:
-                - Name: output-SAM_Build_and_SAM_Deploy
+                - Name: output-Build_and_Deploy_System
 
-        # - Name: Run_Tests
-        #   Actions:
-        #     - Name: Test_S3_Bucket_Notification
-        #       ActionTypeId:
-        #         Category: Build
-        #         Owner: AWS
-        #         Provider: CodeBuild
-        #         Version: '1'
-        #       InputArtifacts:
-        #         - Name: output-SAM_Build_and_SAM_Deploy
-        #       Configuration:
-        #         ProjectName: !Ref TestS3BucketNotification
-        #       RunOrder: '1'
-        #       OutputArtifacts:
-        #         - Name: output-Test_Log_Bucket_Notification
+        - Name: Run_Finalizer
+          Actions:
+            - Name: Test_S3_Bucket_Notification
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              InputArtifacts:
+                - Name: output-Build_and_Deploy_System
+              Configuration:
+                ProjectName: !Ref RunFinalizer
+              RunOrder: '1'
+              OutputArtifacts:
+                - Name: output-RunFinalizer
 
 
 
@@ -638,25 +638,25 @@ Resources:
 
 
 
-  # TestS3BucketNotification:
-  #   Type: "AWS::CodeBuild::Project"
-  #   Properties:
-  #     Artifacts:
-  #       Type: CODEPIPELINE
-  #     # BadgeEnabled: false
-  #     Description: CodeBuild that will put an obect in the S3 bucket to test the applicaiton 
-  #     Environment:
-  #       ComputeType: BUILD_GENERAL1_SMALL
-  #       Image: aws/codebuild/python:3.6.5
-  #       Type: LINUX_CONTAINER
-  #     # Name:
-  #     #   Ref: MyCodeBuildProjectName
-  #     ServiceRole: !Ref CodeBuildRole
-  #     TimeoutInMinutes: 30
-  #     Source:
-  #       BuildSpec: deployment/buildspec_Test_S3_Bucket_Notification.yaml
-  #       GitCloneDepth: 0
-  #       Type: CODEPIPELINE
+  RunFinalizer:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      # BadgeEnabled: false
+      Description: CodeBuild that will Run_Finalizer 
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/python:3.6.5
+        Type: LINUX_CONTAINER
+      # Name:
+      #   Ref: MyCodeBuildProjectName
+      ServiceRole: !Ref CodeBuildRole
+      TimeoutInMinutes: 30
+      Source:
+        BuildSpec: deployment/buildspec_Run_Finalizer.yaml
+        GitCloneDepth: 0
+        Type: CODEPIPELINE
 
 
 ############################################################################################################

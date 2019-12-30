@@ -162,6 +162,10 @@ Resources:
                 ComputeType: BUILD_GENERAL1_SMALL
                 Image: aws/codebuild/python:3.6.5
                 Type: LINUX_CONTAINER
+                EnvironmentVariables:
+                    - Name: FINALIZER_PROJECT_NAME
+                        Value: !Sub '${AWS::StackName}-Finalizer'
+                        Type: PLAINTEXT
             ServiceRole: !Ref CodeBuildRole
             TimeoutInMinutes: 10
             Source:
@@ -219,6 +223,7 @@ Resources:
                             - "ssm:**"
                             - "logs:*"
                             - "kms:*"
+                            - "codebuild:*"
                       Resource: "*"
             Roles: 
                 - Ref: "CodeBuildRole"
