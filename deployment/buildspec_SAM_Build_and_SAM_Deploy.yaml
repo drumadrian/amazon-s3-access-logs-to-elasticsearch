@@ -42,6 +42,7 @@ phases:
       # - REGION=$(aws configure get region)
       - SAM_APP_STACK_NAME=$APP_STACK_NAME-app
       - cd sam-app/
+      - ls -al
       - sam validate --template template.yaml --debug
       - SAM_APP_STACK_FINALIZER_PROJECT_NAME=$SAM_APP_STACK_NAME-Finalizer
 
