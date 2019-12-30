@@ -511,7 +511,7 @@ Resources:
 
         - Name: Run_Finalizer
           Actions:
-            - Name: Test_S3_Bucket_Notification
+            - Name: Run_Finalizer
               ActionTypeId:
                 Category: Build
                 Owner: AWS
