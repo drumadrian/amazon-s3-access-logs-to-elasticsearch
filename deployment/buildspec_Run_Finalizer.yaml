@@ -21,6 +21,8 @@ env:
     key2: "value2"
 phases:
   install:
+    runtime-versions:
+      python: 3.8
     commands:
       - echo no install necessary
       # - command
