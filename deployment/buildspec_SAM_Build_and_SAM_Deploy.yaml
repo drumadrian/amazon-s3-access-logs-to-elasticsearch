@@ -40,11 +40,13 @@ phases:
       - pwd
       - ls -al 
       # - REGION=$(aws configure get region)
-      - SAM_APP_STACK_NAME=$APP_STACK_NAME-app
+      - echo $APP_STACK_NAME
       - cd sam-app/
       - ls -al
+      - ECHO $RANDOM
+      - $$APP_STACK_BUCKET_NAME=$APP_STACK_NAME-$RANDOM
       - sam validate --template template.yaml --debug
-      - SAM_APP_STACK_FINALIZER_PROJECT_NAME=$SAM_APP_STACK_NAME-Finalizer
+      # - SAM_APP_STACK_FINALIZER_PROJECT_NAME=$SAM_APP_STACK_NAME-Finalizer
 
 
   build:
@@ -52,7 +54,7 @@ phases:
       - sam build --template template.yaml --debug
       # - sam deploy -g 
       # - sam deploy --guided
-      - sam deploy --stack-name logmydata-app --debug
+      - sam deploy --stack-name $$APP_STACK_NAME --s3-bucket  $$APP_STACK_BUCKET_NAME --debug
       # - true || sam deploy --guided --stack-name logmydata-app --debug
       # - true | sam deploy --guided --stack-name $SAM_APP_STACK_NAME
       # - sam deploy --stack-name $SAM_APP_STACK_NAME --region $AWS_DEFAULT_REGION --no-fail-on-empty-changeset --debug

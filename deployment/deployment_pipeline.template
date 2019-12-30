@@ -21,6 +21,11 @@ Parameters:
   #   Type: String
   #   Default: "bucket"
 
+  AppStackName:
+    Description: A name for the AWS SAM stack
+    Type: String
+    Default: "logmydata-app"
+
   BranchName:
     Description: A name for the codecommit repo Branch
     Type: String
@@ -614,7 +619,7 @@ Resources:
             Value: !Ref 'ArtifactStoreBucket'
             Type: PLAINTEXT
           - Name: APP_STACK_NAME
-            Value: !Sub "${AWS::StackName}"
+            Value: !Sub "${AppStackName}"
             Type: PLAINTEXT
           # - Name: codepipelinesnstopicarn
           #   Value: !Ref CodePipelineSNSTopic
