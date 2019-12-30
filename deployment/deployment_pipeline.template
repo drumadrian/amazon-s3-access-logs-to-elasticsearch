@@ -600,8 +600,8 @@ Resources:
         Type: CODEPIPELINE
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        PrivilegedMode: true
-        Image: aws/codebuild/python:3.6.5
+        PrivilegedMode: false
+        Image: pahud/aws-sam-cli
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: codecommithttpsname

@@ -13,7 +13,7 @@
 # https://docs.aws.amazon.com/cli/latest/reference/codebuild/start-build.html
 
 
-version: 0.2
+# version: 0.2
 
 env:
   variables:
@@ -26,11 +26,11 @@ phases:
       - whoami
       
       # - INSTALL HOMEBREW 
-      - true || sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)"
-      - su -c (sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)" ) noboby
+      # - true || sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)"
+      # - su -c (sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)" ) noboby
 
-      - brew tap aws/tap
-      - brew install aws-sam-cli
+      # - brew tap aws/tap
+      # - brew install aws-sam-cli
       
       # - command
 
