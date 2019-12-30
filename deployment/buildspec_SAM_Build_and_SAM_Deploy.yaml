@@ -58,7 +58,7 @@ phases:
       # - sam deploy -g 
       # - sam deploy --guided
       - aws s3 mb s3://$APP_STACK_BUCKET_NAME --region $AWS_DEFAULT_REGION
-      - sam deploy --stack-name $APP_STACK_NAME --s3-bucket  $APP_STACK_BUCKET_NAME --debug
+      - sam deploy --stack-name $APP_STACK_NAME --s3-bucket  $APP_STACK_BUCKET_NAME --no-fail-on-empty-changeset --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND --debug 
       # - true || sam deploy --guided --stack-name logmydata-app --debug
       # - true | sam deploy --guided --stack-name $SAM_APP_STACK_NAME
       # - sam deploy --stack-name $SAM_APP_STACK_NAME --region $AWS_DEFAULT_REGION --no-fail-on-empty-changeset --debug
