@@ -153,7 +153,7 @@ Resources:
     Finalizer:
         Type: "AWS::CodeBuild::Project"
         Properties:
-            Name: !Sub '${AWS::StackName}-Finalizer'
+            Name: logmydata-Finalizer'
             Artifacts:
                 Type: NO_ARTIFACTS
                 # BadgeEnabled: false
@@ -164,7 +164,7 @@ Resources:
                 Type: LINUX_CONTAINER
                 EnvironmentVariables:
                     - Name: FINALIZER_PROJECT_NAME
-                        Value: !Sub '${AWS::StackName}-Finalizer'
+                        Value: logmydata-Finalizer'
                         Type: PLAINTEXT
             ServiceRole: !Ref CodeBuildRole
             TimeoutInMinutes: 10
