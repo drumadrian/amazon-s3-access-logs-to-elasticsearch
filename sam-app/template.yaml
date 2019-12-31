@@ -190,10 +190,10 @@ Resources:
                           commands:
                             - ls -al
                             - echo 'Now adding 4 secure parameters using KMS key'
-                            - true || aws ssm put-parameter --name "/logmydata/cloud_id" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
-                            - true || aws ssm put-parameter --name "/logmydata/http_auth_username" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
-                            - true || aws ssm put-parameter --name "/logmydata/http_auth_password" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
-                            - true || aws ssm put-parameter --name "/logmydata/index_name" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
+                            - aws ssm put-parameter --name "/logmydata/cloud_id" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
+                            - aws ssm put-parameter --name "/logmydata/http_auth_username" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
+                            - aws ssm put-parameter --name "/logmydata/http_auth_password" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
+                            - aws ssm put-parameter --name "/logmydata/index_name" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
                         post_build:
                           commands:
                             - echo ***** Final step of logmydata SAM application completed *****

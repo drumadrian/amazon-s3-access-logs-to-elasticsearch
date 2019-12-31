@@ -30,7 +30,7 @@ phases:
 
   build:
     commands:
-      - aws codebuild start-build --project-name $FINALIZER_PROJECT_NAME
+      - aws codebuild start-build --project-name "$FINALIZER_PROJECT_NAME"
 
   post_build:
     commands:
