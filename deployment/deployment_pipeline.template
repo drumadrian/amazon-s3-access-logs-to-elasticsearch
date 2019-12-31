@@ -477,22 +477,6 @@ Resources:
               RunOrder: '1'
 
 
-        # - Name: Confirm_Source_Code_Source
-        #   Actions:
-        #     - Name: Use_local_OR_Cloned_code
-        #       ActionTypeId:
-        #         Category: Build
-        #         Owner: AWS
-        #         Provider: CodeBuild
-        #         Version: '1'
-        #       InputArtifacts:
-        #         - Name: code
-        #       Configuration:
-        #         ProjectName: !Ref UselocalORClonedcode
-        #       RunOrder: '1'
-        #       OutputArtifacts:
-        #         - Name: output-Use_local_OR_Cloned_code
-
         - Name: Build_and_Deploy_System
           Actions:
             - Name: SAM_Build_and_SAM_Deploy
@@ -509,7 +493,7 @@ Resources:
               OutputArtifacts:
                 - Name: output-Build_and_Deploy_System
 
-        - Name: Run_Finalizer
+        - Name: Complete_Deployment
           Actions:
             - Name: Run_Finalizer
               ActionTypeId:
@@ -518,7 +502,7 @@ Resources:
                 Provider: CodeBuild
                 Version: '1'
               InputArtifacts:
-                - Name: output-Build_and_Deploy_System
+                - Name: code
               Configuration:
                 ProjectName: !Ref RunFinalizer
               RunOrder: '1'
