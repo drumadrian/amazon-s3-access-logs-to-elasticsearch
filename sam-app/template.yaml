@@ -150,6 +150,115 @@ Resources:
     
 
     
+    cleanupBucketOnDelete:
+        DependsOn: cleanupBucketOnDeleteFunction
+        Type: Custom::cleanupbucket
+        Properties:
+            ServiceToken: 
+                Fn::GetAtt: 
+                  - "cleanupBucketOnDeleteFunction"
+                  - "Arn"
+            BucketName: !Sub '${logmydataFunctionBucket.Arn}'
+          # BucketName: !Ref ArtifactStoreBucketName
+
+    
+    cleanupBucketOnDeleteFunction:
+        DependsOn: logmydataFunctionBucket
+        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+        # Type: "AWS::Lambda::Function"
+        Properties:
+            Role: !GetAtt cleanupBucketOnDeleteLambdaRole.Arn
+            CodeUri: cleanupBucketOnDelete/
+            Handler: cleanupBucketOnDelete.lambda_handler
+            Runtime: python3.7
+            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+                Variables:
+                    s3_bucket_name: !Ref logmydataFunctionBucket
+            Timeout: 60
+            Description: cleanup Bucket on Delete Lambda Lambda function.
+        # FunctionName: lambda_function
+        # Handler: index.lambda_handler
+        # Role : !GetAtt cleanupBucketOnDeleteLambdaRole.Arn
+        # Runtime: python3.7
+    
+
+    cleanupBucketOnDeleteLambdaRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Action: ['sts:AssumeRole']
+                      Effect: Allow
+                      Principal:
+                        Service: [lambda.amazonaws.com]
+
+
+    cleanupBucketOnDeleteLambdaRolePolicy: 
+        Type: "AWS::IAM::Policy"
+        Properties: 
+            PolicyName: !Sub "${AWS::StackName}-cleanupBucketOnDeleteLambdaRolePolicy"
+            PolicyDocument: 
+                Version: "2012-10-17"
+                Statement: 
+                    - Effect: "Allow"
+                      Action: 
+                            - "s3:*"
+                            - "logs:*"
+                      Resource: "*"
+                    - Effect: "Deny"
+                      Action: 
+                            - "s3:DeleteBucket"
+                      Resource: "*"
+            Roles: 
+                - Ref: "cleanupBucketOnDeleteLambdaRole"
+
+    # cleanupBucketOnDeleteLambdaRole:
+    #     Type: AWS::IAM::Role
+    #     Properties:
+    #       AssumeRolePolicyDocument:
+    #         Version: '2012-10-17'
+    #         Statement:
+    #         - Effect: Allow
+    #           Principal:
+    #             Service:
+    #             - lambda.amazonaws.com
+    #           Action:
+    #           - sts:AssumeRole
+    #       Path: "/"
+    #       Policies:
+    #       - PolicyName: !Join [ -, [!Ref 'AWS::StackName', 'cleanupBucketOnDeleteLambdaPolicy'] ]
+    #         PolicyDocument:
+    #           Version: '2012-10-17'
+    #           Statement:
+    #           - Effect: Allow
+    #             Action:
+    #             - logs:*
+    #             - s3:*
+    #             Resource: '*'
+    #           - Effect: Deny
+    #             Action:
+    #             - s3:DeleteBucket
+    #             Resource: '*'
+        
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
     Finalizer:
         Type: "AWS::CodeBuild::Project"
         Properties:
