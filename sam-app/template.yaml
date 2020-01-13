@@ -71,17 +71,6 @@ Resources:
                       Resource: "*"
             Roles: 
                 - Ref: "logmydataFunctionRole"
-
-
-
-    # cloud_idCredentialParameter:
-    #     Properties:
-    #         Description: Parameter Store Credential for cloud_id
-    #         Name: /logmydata/cloud_id
-    #         Type: String
-    #         Value: 'notset'
-    #     Type: AWS::SSM::Parameter
-
     
 
     ParameterStoreEncryptionKeyAlias:
@@ -139,15 +128,7 @@ Resources:
 
     logmydataFunctionBucket:
         Type: AWS::S3::Bucket
-        # Properties:
-        #     NotificationConfiguration:
-        #         LambdaConfigurations:
-        #             - Function: logmydataFunction
-        #                 Event: s3:ObjectCreated:*
-        # DependsOn:
-        #     - logmydataFunctionS3BucketEventPermission
-    
-    
+
 
     
     cleanupBucketOnDelete:
@@ -176,11 +157,7 @@ Resources:
                     s3_bucket_name: !Ref logmydataFunctionBucket
             Timeout: 60
             Description: cleanup Bucket on Delete Lambda Lambda function.
-        # FunctionName: lambda_function
-        # Handler: index.lambda_handler
-        # Role : !GetAtt cleanupBucketOnDeleteLambdaRole.Arn
-        # Runtime: python3.7
-    
+
 
     cleanupBucketOnDeleteLambdaRole:
         Type: AWS::IAM::Role
@@ -213,103 +190,34 @@ Resources:
             Roles: 
                 - Ref: "cleanupBucketOnDeleteLambdaRole"
 
-    # cleanupBucketOnDeleteLambdaRole:
-    #     Type: AWS::IAM::Role
-    #     Properties:
-    #       AssumeRolePolicyDocument:
-    #         Version: '2012-10-17'
-    #         Statement:
-    #         - Effect: Allow
-    #           Principal:
-    #             Service:
-    #             - lambda.amazonaws.com
-    #           Action:
-    #           - sts:AssumeRole
-    #       Path: "/"
-    #       Policies:
-    #       - PolicyName: !Join [ -, [!Ref 'AWS::StackName', 'cleanupBucketOnDeleteLambdaPolicy'] ]
-    #         PolicyDocument:
-    #           Version: '2012-10-17'
-    #           Statement:
-    #           - Effect: Allow
-    #             Action:
-    #             - logs:*
-    #             - s3:*
-    #             Resource: '*'
-    #           - Effect: Deny
-    #             Action:
-    #             - s3:DeleteBucket
-    #             Resource: '*'
-        
-    
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-    Finalizer:
-        Type: "AWS::CodeBuild::Project"
+    customResources:
+        DependsOn: customResourcesLambdaRolePolicy
+        Type: Custom::customresources
         Properties:
-            Name: !Sub '${AWS::StackName}-Finalizer'
-            Artifacts:
-                Type: NO_ARTIFACTS
-                # BadgeEnabled: false
-            Description: CodeBuild project that will create SSM Secure parameters  
-            Environment:
-                ComputeType: BUILD_GENERAL1_SMALL
-                Image: aws/codebuild/python:3.6.5
-                Type: LINUX_CONTAINER
-                EnvironmentVariables: 
-                    - 
-                        Name: FINALIZER_PROJECT_NAME
-                        Value: !Sub '${AWS::StackName}-Finalizer'
-                        Type: PLAINTEXT
-            ServiceRole: !Ref CodeBuildRole
-            TimeoutInMinutes: 10
-            Source:
-                # Location: !GetAtt [coderepo, CloneUrlHttp]
-                Type: NO_SOURCE
-                BuildSpec: !Sub |
-                    version: 0.2
-                    phases:
-                        install:
-                          commands:
-                            - pwd
-                            - ls -al
-                            - pip install --upgrade pip
-                            - pip install -U boto3
-                            - logbucketname=${logmydataFunctionBucket}
-                            - loglabmdaarn=${logmydataFunction.Arn}
-                            - echo logbucketname=$logbucketname
-                            - echo loglabmdaarn=$loglabmdaarn
-                            - touch notification.json
-                        build:
-                          commands:
-                            - ls -al
-                            - echo 'Now adding 4 secure parameters using KMS key'
-                            - aws ssm put-parameter --name "/logmydata/cloud_id" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
-                            - aws ssm put-parameter --name "/logmydata/http_auth_username" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
-                            - aws ssm put-parameter --name "/logmydata/http_auth_password" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
-                            - aws ssm put-parameter --name "/logmydata/index_name" --value "+" --type "SecureString" --key-id "${ParameterStoreEncryptionKey}" --no-overwrite
-                        post_build:
-                          commands:
-                            - echo ***** Final step of logmydata SAM application completed *****
-                            - echo ***** Finalizer execution complete *****
+            ServiceToken: 
+                Fn::GetAtt: 
+                  - "customResourcesFunction"
+                  - "Arn"
+            parent_stack_name: !Sub '${AWS::StackName}'
+
+    
+    customResourcesFunction:
+        Type: AWS::Serverless::Function 
+        Properties:
+            Role: !GetAtt customResourcesLambdaRole.Arn
+            CodeUri: customresources/
+            Handler: customresources.lambda_handler
+            Runtime: python3.7
+            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+                Variables:
+                    parent_stack_name: !Sub '${AWS::StackName}'
+                    ParameterStoreEncryptionKey: !Sub '${ParameterStoreEncryptionKey}'
+            Timeout: 60
+            Description: Create and Delete custom resources Lambda function.
 
 
-    CodeBuildRole:
+    customResourcesLambdaRole:
         Type: AWS::IAM::Role
         Properties:
             AssumeRolePolicyDocument:
@@ -318,33 +226,33 @@ Resources:
                     - Action: ['sts:AssumeRole']
                       Effect: Allow
                       Principal:
-                        Service: [codebuild.amazonaws.com]
+                        Service: [lambda.amazonaws.com]
 
-    CodeBuildRolePolicy: 
+
+    customResourcesLambdaRolePolicy: 
+        DependsOn: ParameterStoreEncryptionKey
         Type: "AWS::IAM::Policy"
         Properties: 
-            PolicyName: !Sub "${AWS::StackName}-CodeBuildRolePolicy"
+            PolicyName: !Sub "${AWS::StackName}-customResourcesLambdaRolePolicy"
             PolicyDocument: 
                 Version: "2012-10-17"
                 Statement: 
                     - Effect: "Allow"
                       Action: 
                             - "s3:*"
-                            - "ssm:**"
+                            - "ssm:*"
                             - "logs:*"
                             - "kms:*"
-                            - "codebuild:*"
                       Resource: "*"
             Roles: 
-                - Ref: "CodeBuildRole"
+                - Ref: "customResourcesLambdaRole"
 
+
+
+    
 
 
 Outputs:
-
-    # HelloWorldApi:
-    #   Description: "API Gateway endpoint URL for Prod stage for Hello World function"
-    #   Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
 
     logmydataFunction:
       Description: "logmydataFunction Lambda Function ARN"

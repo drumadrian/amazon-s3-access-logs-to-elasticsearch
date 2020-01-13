@@ -1,0 +1,4 @@
+boto3==1.10.43
+botocore==1.13.43
+aws-xray-sdk==2.4.3
+requests==2.22.0
