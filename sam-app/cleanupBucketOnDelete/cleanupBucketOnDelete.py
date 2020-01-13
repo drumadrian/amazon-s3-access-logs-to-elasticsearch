@@ -11,14 +11,12 @@ def empty_delete_buckets(bucket_name):
     :return:
     """
     print ("trying to delete the bucket {0}".format(bucket_name))
-    # s3_client = SESSION.client('s3', region_name=region)
     s3_client = boto3.client('s3')
-    # s3 = SESSION.resource('s3', region_name=region)
     s3 = boto3.resource('s3')
 
     try:
         bucket = s3.Bucket(bucket_name).load()
-    except ClientError:
+    except:
         print ("bucket {0} does not exist".format(bucket_name))
         return
     # Check if versioning is enabled
@@ -71,11 +69,6 @@ def lambda_handler(event, context):
         bucket = os.getenv('s3_bucket_name')
         if event['RequestType'] == 'Delete':
             empty_delete_buckets(bucket)
-            #s3 = boto3.resource('s3')
-            #bucket.objects.all().delete()
-            #bucket = s3.Bucket(bucket)
-            #for obj in bucket.objects.filter():
-                #s3.Object(bucket.name, obj.key).delete()
         sendResponseCfn(event, context, "SUCCESS")
     except Exception as e:
         print(e)

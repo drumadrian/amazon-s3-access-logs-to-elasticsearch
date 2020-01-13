@@ -2,24 +2,15 @@
 import json
 import urllib.parse
 import boto3
-
 from elasticsearch import Elasticsearch
 import requests
 from datetime import datetime
-
 from s3logparse import s3logparse
-
 import os
 from tempfile import NamedTemporaryFile
-
 import traceback
-# import os, traceback, json, boto3
-
-# from aws_xray_sdk.core import patch_all
 from aws_xray_sdk import core
-# from aws_xray_sdk import patch_all
 core.patch_all()
-# patch_all()
 
 # Notes:
 # https://docs.aws.amazon.com/code-samples/latest/catalog/python-s3-get_object.py.html
@@ -48,7 +39,6 @@ def lambda_handler(event, context):
     http_auth_username = os.getenv('http_auth_username')
     http_auth_password = os.getenv('http_auth_password')
     index_name = os.getenv('index_name')
-
 
     try:
         # Get all parameters for this app is not set using environment variables
@@ -104,7 +94,6 @@ def lambda_handler(event, context):
     # with open(f.name, "r") as new_f:
     #     print(new_f.read())
 
-
     with open(f.name, "r") as fh:
         for log_entry in s3logparse.parse_log_lines(fh.readlines()):
             print(log_entry)
@@ -115,19 +104,12 @@ def lambda_handler(event, context):
 ##################################################################################################
     #Now put that data in ElasticCloud! 
 ##################################################################################################
-
-
     es = Elasticsearch(cloud_id=cloud_id_var, http_auth=(http_auth_username,http_auth_password))
     es.info()
-
-    # result = es.search(index="sw", doc_type="people", body=search_definition)
-    # print(json.dumps(result, indent=4))
-
 
     # create an index in elasticsearch, ignore status code 400 (index already exists)
     es.indices.create(index='access-logs', ignore=400)
     # {'acknowledged': True, 'shards_acknowledged': True, 'index': 'my-index'}
-
     # datetimes will be serialized
     # es.index(index="my-index", id=44, body={"any": "data44", "timestamp": datetime.now()})
     
@@ -153,10 +135,6 @@ def lambda_handler(event, context):
     }
 
     es.index(index=index_name, body=es_body)
-
-
-
-
 
 
 
