@@ -12,14 +12,6 @@ Description: >
 
 
 Parameters: 
-  # Email:
-  #   Description: The email address where CodePipeline sends pipeline notifications
-  #   Type: String
-
-  # ArtifactStoreBucketName:
-  #   Description: A name for the Deployment Artifact S3 bucket
-  #   Type: String
-  #   Default: "bucket"
 
   AppStackName:
     Description: A name for the AWS SAM stack
@@ -36,35 +28,12 @@ Parameters:
     Type: String
     Default: "https://github.com/drumadrian/amazon-s3-access-logs-to-elasticsearch.git"
 
-  # IDName:
-  #   Description: A name for the Deployment Secret ID 
-  #   Type: String
-  #   Default: "TBD"
-
-  # SecretName:
-  #   Description: A name for the Deployment Secret 
-  #   Type: String
-  #   Default: "TBD"
-
-
 
 Resources:
-
-  # SSMstacknameparameter:
-  #   Type: "AWS::SSM::Parameter"
-  #   Properties: 
-  #     Description: This is the stackname to be used in AWS CodeBuild pipeline
-  #     Name: !Sub "${AWS::StackName}-${BranchName}"
-  #     Type: String
-  #     Value: !Sub "${AWS::StackName}"
-
-
-
 
   ArtifactStoreBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # BucketName: !Ref ArtifactStoreBucketName      
       VersioningConfiguration:
         Status: Enabled
 
@@ -78,7 +47,6 @@ Resources:
           - "cleanupBucketOnDeleteLambda"
           - "Arn"
       BucketName: !Sub '${ArtifactStoreBucket.Arn}'
-      # BucketName: !Ref ArtifactStoreBucketName
 
 
   cleanupBucketOnDeleteLambda:
@@ -222,59 +190,8 @@ Resources:
   coderepo:
     Type: AWS::CodeCommit::Repository
     Properties:
-      # RepositoryName: !Ref RepositoryNameApp
       RepositoryName: !Sub "${AWS::StackName}"
       RepositoryDescription: "This repository holds the code that AWS CodePipeline will use to deploy."
-      # Triggers:
-      # - Name: MasterTrigger
-      #   CustomData: no custom data
-      #   DestinationArn:
-      #     Ref: CodePipelineSNSTopic
-      #   Branches:
-      #   - Master
-      #   Events:
-      #   - all
-
-
-  # CodePipelineSNSTopic:
-  #   Type: AWS::SNS::Topic
-  #   Properties:
-  #     Subscription:
-  #       - Endpoint: !Ref Email
-  #         Protocol: email
-
-
-  # CodePipelineSNSTopicPolicy:
-  #   Type: AWS::SNS::TopicPolicy
-  #   Properties:
-  #     Topics:
-  #       - !Ref CodePipelineSNSTopic 
-  #     PolicyDocument:
-  #       Id: Id1
-  #       Version: '2012-10-17'
-  #       Statement:
-  #       - Sid: StatementID1
-  #         Effect: Allow
-  #         Principal:
-  #           Service:
-  #           - 'events.amazonaws.com' # Allow CloudWatch Events
-  #           # - 'budgets.amazonaws.com' # Allow Budget Notifications
-  #           # - 'rds.amazonaws.com' # Allow RDS Events
-  #           # - 's3.amazonaws.com' # Allow S3 Event Notifications
-  #           # - 'lambda.amazonaws.com' # Allow S3 Event Notifications
-  #         Action: 'sns:Publish'
-  #         Resource: !Ref CodePipelineSNSTopic
-  #       - Sid: Sid2
-  #         Effect: Allow
-  #         Principal:
-  #           AWS: '*' # Allow CloudWatch Alarms, ElastiCache Notifications, Elastic Beanstalk Notifications, Auto Scaling Notification
-  #         Action: 'sns:Publish'
-  #         Resource: !Ref CodePipelineSNSTopic
-  #         Condition:
-  #           StringEquals:
-  #             'AWS:SourceOwner': !Ref 'AWS::AccountId'
-
-
 
 
 
@@ -296,7 +213,6 @@ Resources:
         - CodeCommit Repository State Change
         resources:
         - !GetAtt 'coderepo.Arn'
-      # Name: !Sub "${AWS::StackName}-SourceEvent"
       State: ENABLED
       Targets: 
         - Arn: !Join
@@ -310,10 +226,6 @@ Resources:
           Id: ProjectPipelineTarget
           RoleArn: !GetAtt 'CodeCloudWatchRole.Arn'
     Type: AWS::Events::Rule
-
-
-
-
 
 
   CodeCloudWatchRole:
@@ -343,16 +255,7 @@ Resources:
                   - !Ref 'AWS::AccountId'
                   - !Ref 'Pipeline'
         PolicyName: 'TriggerPipelinePolicy'
-        # PolicyName: !Join [ -, [!Ref 'AWS::StackName', 'TriggerPipelinePolicy'] ]
-      # RoleName: !Sub "${AWS::StackName}-Role"
     Type: AWS::IAM::Role
-
-
-
-
-
-
-
 
 
   CodeBuildRole:
@@ -373,31 +276,6 @@ Resources:
             Statement:
               - Action:
                 - '*'
-                # - 'logs:*'
-                # - 'ec2:*'
-                # - 's3:*'
-                # - 'iam:*'
-                # - 'dynamodb:*'
-                # # - 'sns:*'
-                # - 'cloudformation:*'
-                # # - 'codecommit:*'
-                # - 'events:*'
-                # - 'codebuild:*'
-                # - 'codepipeline:*'
-                # - 'cloudfront:*'
-                # - 'lambda:*'
-                # - 'sqs:*'
-                # - 'logs:*'
-                # # - 'kms:*'
-                # - 'ds:*'
-                # - 'es:*'
-                # - 'route53:*'
-                # # - 'cognito-identity:*'
-                # # - 'cognito-idp:*'
-                # - 'ecs:*'
-                # - 'ecr:*'
-                # - 'cloudwatch:*'
-                # - 'elasticloadbalancing:*'
                 Effect: Allow
                 Resource: '*'
 
@@ -469,8 +347,6 @@ Resources:
               Configuration:
                 BranchName: !Ref BranchName 
                 PollForSourceChanges: false
-                # RepositoryName: !Ref RepositoryNameApp
-                # RepositoryName: Fn::GetAtt: [ coderepo, Name ]
                 RepositoryName: !GetAtt coderepo.Name
               OutputArtifacts:
                 - Name: code
@@ -521,18 +397,14 @@ Resources:
     Properties:
       Artifacts:
         Type: NO_ARTIFACTS
-      # BadgeEnabled: false
       Description: CodeBuild that will Clone from GitHub and push to CodeCommit to start Code Pipeline 
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/python:3.6.5
         Type: LINUX_CONTAINER
-      # Name:
-      #   Ref: MyCodeBuildProjectName
       ServiceRole: !Ref CodeBuildRole
       TimeoutInMinutes: 30
       Source:
-        # Location: !GetAtt [coderepo, CloneUrlHttp]
         Type: NO_SOURCE
         BuildSpec: !Sub |
           version: 0.2
@@ -578,8 +450,6 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       Description: CodeBuild that will use SAM to Build and Deploy the applicaiton 
-      # Name:
-      #   Ref: MyCodeBuildProjectName
       ServiceRole: !Ref CodeBuildRole
       TimeoutInMinutes: 30
       Source:
@@ -629,78 +499,8 @@ Resources:
             Value: !Sub "${AppStackName}-Finalizer"
             Type: PLAINTEXT
 
-
-
-
 ############################################################################################################
 ############################################################################################################
-
-
-
-
-
-
-  # SSMparametercodebranchname:
-  #   Type: "AWS::SSM::Parameter"
-  #   Properties: 
-  #     Description: The branch name of the code from the AWS CodeCommit Repository
-  #     Name: !Sub "${AWS::StackName}-SSMparametercodebranchname"
-  #     Type: String
-  #     Value: !Ref BranchName
-
-
-  # SSMparametercoderepoURL:
-  #   Type: "AWS::SSM::Parameter"
-  #   Properties: 
-  #     Description: The URL of the AWS CodeCommit Repository
-  #     Name: !Sub "${AWS::StackName}-coderepoURL"
-  #     Type: String
-  #     Value: !GetAtt coderepo.CloneUrlHttp
-
-
-  # SSMparametercodecommitrepositoryname:
-  #   Type: "AWS::SSM::Parameter"
-  #   Properties: 
-  #     Description: The Name of the AWS CodeCommit Repository
-  #     Name: !Sub "${AWS::StackName}-codecommitrepositoryname"
-  #     Type: String
-  #     Value: !GetAtt coderepo.Name
-
-  # SSMparameterpipelinename:
-  #   Type: "AWS::SSM::Parameter"
-  #   Properties: 
-  #     Description: The Pipeline name of the build pipeline.  This matches the StackName of the build pipeline stack that creates everything
-  #     Name: !Sub "${AWS::StackName}-stackname"
-  #     Type: String
-  #     Value: !Sub "${AWS::StackName}"
-
-  # SSMparametercodeSNStopicName:
-  #   Type: "AWS::SSM::Parameter"
-  #   Properties: 
-  #     Description: The topic name of the shared SNS topic 
-  #     Name: !Sub "${AWS::StackName}-SSMparametercodeSNStopicName"
-  #     Type: String
-  #     Value: !Ref CodePipelineSNSTopic
-
-  # SSMparametercodeSNStopicARN:
-  #   Type: "AWS::SSM::Parameter"
-  #   Properties: 
-  #     Description: The topic name of the shared SNS topic 
-  #     Name: !Sub "${AWS::StackName}-SSMparametercodeSNStopicARN"
-  #     Type: String
-  #     Value: !Ref CodePipelineSNSTopic
-
-
-  # SSMparametercodeSNStopicEMAIL:
-  #   Type: "AWS::SSM::Parameter"
-  #   Properties: 
-  #     Description: The topic name of the shared SNS topic 
-  #     Name: !Sub "${AWS::StackName}-SSMparametercodeSNStopicEMAIL"
-  #     Type: String
-  #     Value: !Ref Email
-
-
-
 
 
 Outputs:
