@@ -438,7 +438,7 @@ Resources:
             post_build:
               commands:
                 - echo ***** Build completed *****
-                - echo ***** Code retried from ${GitHubRepositoryHTTPSurl} *****
+                - echo ***** Code cloned from ${GitHubRepositoryHTTPSurl} *****
                 - echo ***** Code was pushed to ${coderepo.CloneUrlHttp} *****
 
 
