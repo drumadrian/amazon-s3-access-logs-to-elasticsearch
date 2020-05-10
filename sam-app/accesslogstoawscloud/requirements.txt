@@ -1,0 +1,12 @@
+certifi==2019.11.28
+chardet==3.0.4
+elasticsearch==7.1.0
+idna==2.8
+requests==2.22.0
+requests-aws4auth==0.9
+urllib3==1.25.7
+aws-xray-sdk==2.4.3
+boto3==1.10.43
+botocore==1.13.43
+requests==2.22.0
+aws-xray-sdk==2.4.3

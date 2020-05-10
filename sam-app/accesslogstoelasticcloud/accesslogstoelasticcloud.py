@@ -11,6 +11,7 @@ from tempfile import NamedTemporaryFile
 import traceback
 from aws_xray_sdk import core
 core.patch_all()
+import logging
 
 # Notes:
 # https://docs.aws.amazon.com/code-samples/latest/catalog/python-s3-get_object.py.html
@@ -40,6 +41,29 @@ def lambda_handler(event, context):
     http_auth_password = os.getenv('http_auth_password')
     index_name = os.getenv('index_name')
 
+    enable_logging = os.getenv('enable_logging')
+    if enable_logging == 'True':
+        enable_logging = True
+    else: 
+        enable_logging = False
+
+    ######################################################################
+    # Create, Add, and Configure Python logging handler
+    ######################################################################
+    log = logging.getLogger("PythonTest")
+    log.setLevel(logging.INFO)
+    log.addHandler(handler)
+    # logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+
+
+    ######################################################################
+    # Test print and Python logging 
+    ######################################################################
+    print("hello world")
+    log.debug("hello stdout world")
+    log.info("hello AWS world")
+
+
     try:
         # Get all parameters for this app is not set using environment variables
 
@@ -64,8 +88,9 @@ def lambda_handler(event, context):
                 index_name = param.get('Value')
 
     except:
-        print("Encountered an error loading credentials from SSM.")
-        traceback.print_exc()
+        if enable_logging:
+            print("Encountered an error loading credentials from SSM.")
+            traceback.print_exc()
 
 
     # Get the object from the event and show its content type
@@ -108,7 +133,7 @@ def lambda_handler(event, context):
     es.info()
 
     # create an index in elasticsearch, ignore status code 400 (index already exists)
-    es.indices.create(index='access-logs', ignore=400)
+    es.indices.create(index='accesslogstoelasticcloud', ignore=400)
     # {'acknowledged': True, 'shards_acknowledged': True, 'index': 'my-index'}
     # datetimes will be serialized
     # es.index(index="my-index", id=44, body={"any": "data44", "timestamp": datetime.now()})

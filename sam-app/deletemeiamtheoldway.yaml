@@ -3,15 +3,19 @@ Transform: 'AWS::Serverless-2016-10-31'
 Description: >
     sam-app
 
-    SAM Template for amazon-s3-access-logs-to-elasticsearch S3 access log processing function
-    After you enable server access logging, it might take an hour or more before the logs are delivered to the target bucket. 
-
+    Sample SAM Template for sam-app converted into S3 access log processing function
+    After you enable server access logging, it might take a few hours before the logs are delivered to the target bucket. 
 
 Parameters:
 
+    IAMUsername:
+        Description: Name of the IAM user who will be the administrator of the KMS key we create. This user will be able to encrypt values and manage the key.
+        Type: String
+        Default: root
+
     EsIndex:
         Type: String
-        Default: "accesslogstoawscloud"
+        Default: "cloudwatch-logs"
     
     EsDocType: 
         Type: String
@@ -21,12 +25,13 @@ Parameters:
         Type: String
         Default: myendpoint
     
-    
+    # # Name of your Elasticsearch cluster as it appears in the AWS console
+    # EsDomainName:
+    #     Type: String
+    #     Default: my-cluster
+        
 Resources:
 
-####################################################################################################################################################################################################################################################################################################################################################################################################
-# accesslogstoawscloud
-####################################################################################################################################################################################################################################################################################################################################################################################################
     accesslogstoawscloud:
         Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
         Properties:
@@ -43,6 +48,14 @@ Resources:
                     ES_DOC_TYPE: !Ref EsDocType
                     parent_stack_name: !Sub '${AWS::StackName}'
                     enable_logging: 'True'
+            # Events:
+            #     S3AccessLogEvent:
+            #         Type: S3
+            #         Properties:
+            #             Bucket: 
+            #                 Ref: accesslogbucket
+            #             Events: s3:ObjectCreated:*
+
 
     accesslogstoawscloudrole:
         Type: AWS::IAM::Role
@@ -74,9 +87,87 @@ Resources:
 
 
 
-####################################################################################################################################################################################################################################################################################################################################################################################################
-# accesslogstoelasticcloud
-####################################################################################################################################################################################################################################################################################################################################################################################################
+
+
+    accesslogstoawscloudInvokePermission:
+        Type: 'AWS::Lambda::Permission'
+        Properties:
+            Action: 'lambda:InvokeFunction'
+            FunctionName: !Ref accesslogstoawscloud
+            Principal: sns.amazonaws.com
+
+    accesslogstoelasticcloudInvokePermission:
+        Type: 'AWS::Lambda::Permission'
+        Properties:
+            Action: 'lambda:InvokeFunction'
+            FunctionName: !Ref accesslogstoelasticcloud
+            Principal: sns.amazonaws.com
+
+    SnsTopic:
+        Type: 'AWS::SNS::Topic'
+        Properties:
+            # TopicName: !Ref SnsTopicName
+            Subscription:
+                - Protocol: lambda
+                  Endpoint: !GetAtt accesslogstoawscloud.Arn
+                - Protocol: lambda
+                  Endpoint: !GetAtt accesslogstoelasticcloud.Arn
+
+
+    SNSTopicPolicy:
+        Type: 'AWS::SNS::TopicPolicy'
+        Properties:
+            Topics:
+                - !Ref SnsTopic
+            PolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Effect: Allow
+                      Action: 'sns:Publish'
+                      Resource: !Ref SnsTopic
+                      Condition:
+                        ArnLike:
+                            aws:SourceArn: !Sub "arn:aws:s3:::${accesslogbucket}"
+                      Principal:
+                        AWS: '*'
+
+    # https://aws.amazon.com/premiumsupport/knowledge-center/unable-validate-destination-s3/
+    accesslogbucket:
+        Type: 'AWS::S3::Bucket'
+        DependsOn: SNSTopicPolicy
+        Properties:
+            # BucketName: !Ref S3BucketName
+            NotificationConfiguration:
+                TopicConfigurations:
+                    - Topic: !Ref SnsTopic
+                      Event: 's3:ObjectCreated:*'
+                        # Filter:
+                        # S3Key:
+                        #     Rules:
+                        #     - Name: prefix
+                        #         Value: 'uploads/sns/'
+                # LambdaConfigurations:
+                    # - Function: !GetAtt FanoutFunction.Arn
+                    #     Event: 's3:ObjectCreated:*'
+                    #     Filter:
+                    #     S3Key:
+                    #         Rules:
+                    #         - Name: prefix
+                    #             Value: 'uploads/lambda/'
+
+
+
+
+
+
+
+
+
+
+
+
+# ------------------------
+
     accesslogstoelasticcloud:
         Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
         Properties:
@@ -92,6 +183,13 @@ Resources:
                     index_name: '-'
                     AWS_XRAY_TRACING_NAME: 'accesslogstoelasticcloud'
                     enable_logging: 'True'
+            # Events:
+            #     S3AccessLogEvent:
+            #         Type: S3
+            #         Properties:
+            #             Bucket: 
+            #                 Ref: accesslogbucket
+            #             Events: s3:ObjectCreated:*
 
     accesslogstoelasticcloudrole:
         Type: AWS::IAM::Role
@@ -122,97 +220,8 @@ Resources:
                 - Ref: "accesslogstoelasticcloudrole"
 
 
-####################################################################################################################################################################################################################################################################################################################################################################################################
-# invokeonnotification
-####################################################################################################################################################################################################################################################################################################################################################################################################
-    invokeonnotification:
-        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-        Properties:
-            Role: !GetAtt accesslogstoelasticcloudrole.Arn
-            CodeUri: invokeonnotification/
-            Handler: invokeonnotification.lambda_handler
-            Runtime: python3.7
-            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
-                Variables:
-                    labmdafunction1: ${accesslogstoawscloud}
-                    labmdafunction2: ${accesslogstoelasticcloud}
-                    AWS_XRAY_TRACING_NAME: 'invokeonnotification'
-                    enable_logging: 'True'
+    
 
-    invokeonnotificationrole:
-        Type: AWS::IAM::Role
-        Properties:
-            AssumeRolePolicyDocument:
-                Version: '2012-10-17'
-                Statement:
-                    - Action: ['sts:AssumeRole']
-                      Effect: Allow
-                      Principal:
-                        Service: [lambda.amazonaws.com]
-
-    invokeonnotificationpolicy: 
-        Type: "AWS::IAM::Policy"
-        Properties: 
-            PolicyName: !Sub "${AWS::StackName}-invokeonnotificationpolicy"
-            PolicyDocument: 
-                Version: "2012-10-17"
-                Statement: 
-                    - Effect: "Allow"
-                      Action: 
-                            - "lambda:*"
-                            - "logs:*"
-                      Resource: "*"
-            Roles: 
-                - Ref: "invokeonnotificationrole"
-
-
-
-####################################################################################################################################################################################################################################################################################################################################################################################################
-# Lambda Permissions
-####################################################################################################################################################################################################################################################################################################################################################################################################
-    accesslogstoawscloudInvokePermission:
-        Type: 'AWS::Lambda::Permission'
-        Properties:
-            Action: 'lambda:InvokeFunction'
-            FunctionName: !Ref accesslogstoawscloud
-            Principal: lambda.amazonaws.com
-
-    accesslogstoelasticcloudInvokePermission:
-        Type: 'AWS::Lambda::Permission'
-        Properties:
-            Action: 'lambda:InvokeFunction'
-            FunctionName: !Ref accesslogstoelasticcloud
-            Principal: lambda.amazonaws.com
-
-    invokeonnotificationInvokePermission:
-        Type: 'AWS::Lambda::Permission'
-        Properties:
-            Action: 'lambda:InvokeFunction'
-            FunctionName: !Ref invokeonnotification
-            Principal: s3.amazonaws.com
-
-
-
-
-####################################################################################################################################################################################################################################################################################################################################################################################################
-# accesslogbucket
-####################################################################################################################################################################################################################################################################################################################################################################################################
-    accesslogbucket:
-        Type: 'AWS::S3::Bucket'
-        Properties:
-            # BucketName: !Ref S3BucketName
-            NotificationConfiguration:
-                # TopicConfigurations:
-                #     - Topic: !Ref SnsTopic
-                #       Event: 's3:ObjectCreated:*'
-                        # Filter:
-                        # S3Key:
-                        #     Rules:
-                        #     - Name: prefix
-                        #         Value: 'uploads/sns/'
-                LambdaConfigurations:
-                    - Function: !GetAtt invokeonnotification.Arn
-                      Event: 's3:ObjectCreated:*'
 
 
     ParameterStoreEncryptionKeyAlias:
@@ -220,7 +229,6 @@ Resources:
         Properties:
             AliasName: 'alias/ParameterStoreEncryptionKey'
             TargetKeyId: !Ref ParameterStoreEncryptionKey
-
 
     ParameterStoreEncryptionKey:
         Type: AWS::KMS::Key
