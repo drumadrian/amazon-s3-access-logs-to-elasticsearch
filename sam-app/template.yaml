@@ -28,20 +28,21 @@ Resources:
 # accesslogstoawscloud
 ####################################################################################################################################################################################################################################################################################################################################################################################################
     accesslogstoawscloud:
+        DependsOn: accesslogstoawscloudpolicy
         Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
         Properties:
             Role: !GetAtt accesslogstoawscloudrole.Arn
             CodeUri: accesslogstoawscloud/
             Handler: accesslogstoawscloud.lambda_handler
             Runtime: python3.7
+            Tracing: Active
+            Timeout: 10
             Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
                 Variables:
-                    AWS_XRAY_TRACING_NAME: 'accesslogstoawscloud'
-                    ES_ENDPOINT: !Ref EsEndpoint
                     ES_REGION: !Sub "${AWS::Region}"
-                    ES_INDEX: !Ref EsIndex
-                    ES_DOC_TYPE: !Ref EsDocType
-                    parent_stack_name: !Sub '${AWS::StackName}'
+                    host: 'example.us-west-2.es.amazonaws.com'
+                    index_name: 'accesslogstoawscloud'
+                    AWS_XRAY_TRACING_NAME: 'accesslogstoawscloud'
                     enable_logging: 'True'
 
     accesslogstoawscloudrole:
@@ -65,13 +66,12 @@ Resources:
                     - Effect: "Allow"
                       Action: 
                             - "s3:*"
-                            - "ssm:*"
-                            - "kms:*"
                             - "logs:*"
+                            - "xray:*"
+                            - "es:*"
                       Resource: "*"
             Roles: 
                 - Ref: "accesslogstoawscloudrole"
-
 
 
 ####################################################################################################################################################################################################################################################################################################################################################################################################
@@ -84,14 +84,17 @@ Resources:
             CodeUri: accesslogstoelasticcloud/
             Handler: accesslogstoelasticcloud.lambda_handler
             Runtime: python3.7
+            Tracing: Active
+            Timeout: 10
             Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
                 Variables:
                     cloud_id: '-'
-                    http_auth_username: '-'
+                    http_auth_username: 'elastic'
                     http_auth_password: '-'
-                    index_name: '-'
+                    index_name: 'accesslogstoelasticcloud'
                     AWS_XRAY_TRACING_NAME: 'accesslogstoelasticcloud'
                     enable_logging: 'True'
+                    parent_stack_name: !Sub '${AWS::StackName}'
 
     accesslogstoelasticcloudrole:
         Type: AWS::IAM::Role
@@ -117,6 +120,7 @@ Resources:
                             - "ssm:*"
                             - "kms:*"
                             - "logs:*"
+                            - "xray:*"
                       Resource: "*"
             Roles: 
                 - Ref: "accesslogstoelasticcloudrole"
@@ -128,14 +132,16 @@ Resources:
     invokeonnotification:
         Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
         Properties:
-            Role: !GetAtt accesslogstoelasticcloudrole.Arn
+            Role: !GetAtt invokeonnotificationrole.Arn
             CodeUri: invokeonnotification/
             Handler: invokeonnotification.lambda_handler
             Runtime: python3.7
+            Tracing: Active
+            Timeout: 10
             Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
                 Variables:
-                    labmdafunction1: ${accesslogstoawscloud}
-                    labmdafunction2: ${accesslogstoelasticcloud}
+                    labmdafunction1: !GetAtt accesslogstoawscloud.Arn
+                    labmdafunction2: !GetAtt accesslogstoelasticcloud.Arn
                     AWS_XRAY_TRACING_NAME: 'invokeonnotification'
                     enable_logging: 'True'
 
@@ -161,10 +167,10 @@ Resources:
                       Action: 
                             - "lambda:*"
                             - "logs:*"
+                            - "xray:*"
                       Resource: "*"
             Roles: 
                 - Ref: "invokeonnotificationrole"
-
 
 
 ####################################################################################################################################################################################################################################################################################################################################################################################################
@@ -175,23 +181,21 @@ Resources:
         Properties:
             Action: 'lambda:InvokeFunction'
             FunctionName: !Ref accesslogstoawscloud
-            Principal: lambda.amazonaws.com
+            Principal: !Sub ${AWS::AccountId}
 
     accesslogstoelasticcloudInvokePermission:
         Type: 'AWS::Lambda::Permission'
         Properties:
             Action: 'lambda:InvokeFunction'
             FunctionName: !Ref accesslogstoelasticcloud
-            Principal: lambda.amazonaws.com
+            Principal: !Sub ${AWS::AccountId}
 
     invokeonnotificationInvokePermission:
         Type: 'AWS::Lambda::Permission'
         Properties:
             Action: 'lambda:InvokeFunction'
             FunctionName: !Ref invokeonnotification
-            Principal: s3.amazonaws.com
-
-
+            Principal: !Sub ${AWS::AccountId}
 
 
 ####################################################################################################################################################################################################################################################################################################################################################################################################
@@ -215,12 +219,14 @@ Resources:
                       Event: 's3:ObjectCreated:*'
 
 
+####################################################################################################################################################################################################################################################################################################################################################################################################
+# KMS Key and Alias and Resources for secure credentials
+####################################################################################################################################################################################################################################################################################################################################################################################################
     ParameterStoreEncryptionKeyAlias:
         Type: AWS::KMS::Alias
         Properties:
             AliasName: 'alias/ParameterStoreEncryptionKey'
             TargetKeyId: !Ref ParameterStoreEncryptionKey
-
 
     ParameterStoreEncryptionKey:
         Type: AWS::KMS::Key
@@ -257,7 +263,9 @@ Resources:
                     Sid: 'Allow use of the key'
                     Effect: Allow
                     Principal:
-                      AWS: !GetAtt accesslogstoelasticcloudrole.Arn
+                      AWS:
+                        - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+                    #   AWS: !GetAtt accesslogstoelasticcloudrole.Arn
                     Action:
                       - 'kms:Encrypt'
                       - 'kms:Decrypt'
@@ -265,65 +273,6 @@ Resources:
                       - 'kms:GenerateDataKey*'
                       - 'kms:DescribeKey'
                     Resource: '*'
-
-    
-    cleanupBucketOnDelete:
-        DependsOn: cleanupBucketOnDeleteFunction
-        Type: Custom::cleanupbucket
-        Properties:
-            ServiceToken: 
-                Fn::GetAtt: 
-                  - "cleanupBucketOnDeleteFunction"
-                  - "Arn"
-            BucketName: !Sub '${accesslogbucket.Arn}'
-
-    
-    cleanupBucketOnDeleteFunction:
-        DependsOn: accesslogbucket
-        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-        Properties:
-            Role: !GetAtt cleanupBucketOnDeleteLambdaRole.Arn
-            CodeUri: cleanupBucketOnDelete/
-            Handler: cleanupBucketOnDelete.lambda_handler
-            Runtime: python3.7
-            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
-                Variables:
-                    s3_bucket_name: !Ref accesslogbucket
-            Timeout: 60
-            Description: cleanup Bucket on Delete Lambda Lambda function.
-
-
-    cleanupBucketOnDeleteLambdaRole:
-        Type: AWS::IAM::Role
-        Properties:
-            AssumeRolePolicyDocument:
-                Version: '2012-10-17'
-                Statement:
-                    - Action: ['sts:AssumeRole']
-                      Effect: Allow
-                      Principal:
-                        Service: [lambda.amazonaws.com]
-
-
-    cleanupBucketOnDeleteLambdaRolePolicy: 
-        Type: "AWS::IAM::Policy"
-        Properties: 
-            PolicyName: !Sub "${AWS::StackName}-cleanupBucketOnDeleteLambdaRolePolicy"
-            PolicyDocument: 
-                Version: "2012-10-17"
-                Statement: 
-                    - Effect: "Allow"
-                      Action: 
-                            - "s3:*"
-                            - "logs:*"
-                      Resource: "*"
-                    - Effect: "Deny"
-                      Action: 
-                            - "s3:DeleteBucket"
-                      Resource: "*"
-            Roles: 
-                - Ref: "cleanupBucketOnDeleteLambdaRole"
-
 
     customResources:
         DependsOn: customResourcesLambdaRolePolicy
@@ -334,7 +283,6 @@ Resources:
                   - "customResourcesFunction"
                   - "Arn"
             parent_stack_name: !Sub '${AWS::StackName}'
-
     
     customResourcesFunction:
         Type: AWS::Serverless::Function 
@@ -343,13 +291,12 @@ Resources:
             CodeUri: customresources/
             Handler: customresources.lambda_handler
             Runtime: python3.7
+            Timeout: 60
             Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
                 Variables:
                     parent_stack_name: !Sub '${AWS::StackName}'
                     ParameterStoreEncryptionKey: !Sub '${ParameterStoreEncryptionKey}'
-            Timeout: 60
             Description: Create and Delete custom resources Lambda function.
-
 
     customResourcesLambdaRole:
         Type: AWS::IAM::Role
@@ -361,7 +308,6 @@ Resources:
                       Effect: Allow
                       Principal:
                         Service: [lambda.amazonaws.com]
-
 
     customResourcesLambdaRolePolicy: 
         DependsOn: ParameterStoreEncryptionKey
@@ -381,6 +327,64 @@ Resources:
             Roles: 
                 - Ref: "customResourcesLambdaRole"
 
+
+####################################################################################################################################################################################################################################################################################################################################################################################################
+# Cleanup Bucket on Delete Resources
+####################################################################################################################################################################################################################################################################################################################################################################################################
+
+    cleanupBucketOnDelete:
+        DependsOn: cleanupBucketOnDeleteFunction
+        Type: Custom::cleanupbucket
+        Properties:
+            ServiceToken: 
+                Fn::GetAtt: 
+                  - "cleanupBucketOnDeleteFunction"
+                  - "Arn"
+            BucketName: !Sub '${accesslogbucket.Arn}'
+
+    cleanupBucketOnDeleteFunction:
+        DependsOn: accesslogbucket
+        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+        Properties:
+            Role: !GetAtt cleanupBucketOnDeleteLambdaRole.Arn
+            CodeUri: cleanupBucketOnDelete/
+            Handler: cleanupBucketOnDelete.lambda_handler
+            Runtime: python3.7
+            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+                Variables:
+                    s3_bucket_name: !Ref accesslogbucket
+            Timeout: 300
+            Description: cleanup Bucket on Delete Lambda Lambda function.
+
+    cleanupBucketOnDeleteLambdaRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Action: ['sts:AssumeRole']
+                      Effect: Allow
+                      Principal:
+                        Service: [lambda.amazonaws.com]
+
+    cleanupBucketOnDeleteLambdaRolePolicy: 
+        Type: "AWS::IAM::Policy"
+        Properties: 
+            PolicyName: !Sub "${AWS::StackName}-cleanupBucketOnDeleteLambdaRolePolicy"
+            PolicyDocument: 
+                Version: "2012-10-17"
+                Statement: 
+                    - Effect: "Allow"
+                      Action: 
+                            - "s3:*"
+                            - "logs:*"
+                      Resource: "*"
+                    - Effect: "Deny"
+                      Action: 
+                            - "s3:DeleteBucket"
+                      Resource: "*"
+            Roles: 
+                - Ref: "cleanupBucketOnDeleteLambdaRole"
 
 
     
