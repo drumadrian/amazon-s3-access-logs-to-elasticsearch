@@ -225,7 +225,7 @@ Resources:
     ParameterStoreEncryptionKeyAlias:
         Type: AWS::KMS::Alias
         Properties:
-            AliasName: 'alias/ParameterStoreEncryptionKey'
+            AliasName: 'alias/accesslogstoelasticcloudEncryptionKey'
             TargetKeyId: !Ref ParameterStoreEncryptionKey
 
     ParameterStoreEncryptionKey:
