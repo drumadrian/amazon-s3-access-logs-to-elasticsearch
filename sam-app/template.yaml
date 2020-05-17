@@ -36,7 +36,7 @@ Resources:
             Handler: accesslogstoawscloud.lambda_handler
             Runtime: python3.7
             Tracing: Active
-            Timeout: 10
+            Timeout: 30
             Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
                 Variables:
                     ES_REGION: !Sub "${AWS::Region}"
@@ -85,7 +85,7 @@ Resources:
             Handler: accesslogstoelasticcloud.lambda_handler
             Runtime: python3.7
             Tracing: Active
-            Timeout: 10
+            Timeout: 30
             Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
                 Variables:
                     cloud_id: '-'
