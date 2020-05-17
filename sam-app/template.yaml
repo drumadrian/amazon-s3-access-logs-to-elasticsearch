@@ -191,11 +191,14 @@ Resources:
             Principal: !Sub ${AWS::AccountId}
 
     invokeonnotificationInvokePermission:
-        Type: 'AWS::Lambda::Permission'
+        Type: AWS::Lambda::Permission
         Properties:
-            Action: 'lambda:InvokeFunction'
-            FunctionName: !Ref invokeonnotification
-            Principal: !Sub ${AWS::AccountId}
+            FunctionName: !GetAtt invokeonnotification.Arn
+            Action: lambda:InvokeFunction
+            Principal: s3.amazonaws.com
+            SourceAccount: !Ref 'AWS::AccountId'
+            SourceArn: !GetAtt accesslogbucket.Arn
+
 
 
 ####################################################################################################################################################################################################################################################################################################################################################################################################
