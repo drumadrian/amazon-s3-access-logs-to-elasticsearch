@@ -168,7 +168,8 @@ def lambda_handler(event, context):
     log.info(es.info())
 
     # create an index in elasticsearch, ignore status code 400 (index already exists)
-    es.indices.create(index='accesslogstoawscloud', ignore=400)
+    # es.indices.create(index='accesslogstoawscloud', ignore=400)
+    es.indices.create(index=index_name, ignore=400)
     # {'acknowledged': True, 'shards_acknowledged': True, 'index': 'my-index'}
     # datetimes will be serialized
     # es.index(index="my-index", id=44, body={"any": "data44", "timestamp": datetime.now()})
