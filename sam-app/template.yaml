@@ -7,19 +7,19 @@ Description: >
     After you enable server access logging, it might take an hour or more before the logs are delivered to the target bucket. 
 
 
-Parameters:
+# Parameters:
 
-    EsIndex:
-        Type: String
-        Default: "accesslogstoawscloud"
+#     EsIndex:
+#         Type: String
+#         Default: "accesslogstoawscloud"
     
-    EsDocType: 
-        Type: String
-        Default: s3-log
+    # EsDocType: 
+    #     Type: String
+    #     Default: s3-log
     
-    EsEndpoint: 
-        Type: String
-        Default: myendpoint
+    # EsEndpoint: 
+    #     Type: String
+    #     Default: myendpoint
     
     
 Resources:
@@ -209,9 +209,9 @@ Resources:
 ####################################################################################################################################################################################################################################################################################################################################################################################################
     accesslogbucket:
         Type: 'AWS::S3::Bucket'
-        Properties:
+        # Properties:
             # BucketName: !Ref S3BucketName
-            NotificationConfiguration:
+            # NotificationConfiguration:
                 # TopicConfigurations:
                 #     - Topic: !Ref SnsTopic
                 #       Event: 's3:ObjectCreated:*'
@@ -220,9 +220,9 @@ Resources:
                         #     Rules:
                         #     - Name: prefix
                         #         Value: 'uploads/sns/'
-                LambdaConfigurations:
-                    - Function: !GetAtt invokeonnotification.Arn
-                      Event: 's3:ObjectCreated:*'
+                # LambdaConfigurations:
+                #     - Function: !GetAtt invokeonnotification.Arn
+                #       Event: 's3:ObjectCreated:*'
 
 
 ####################################################################################################################################################################################################################################################################################################################################################################################################
@@ -338,59 +338,59 @@ Resources:
 # Cleanup Bucket on Delete Resources
 ####################################################################################################################################################################################################################################################################################################################################################################################################
 
-    cleanupBucketOnDelete:
-        DependsOn: cleanupBucketOnDeleteFunction
-        Type: Custom::cleanupbucket
-        Properties:
-            ServiceToken: 
-                Fn::GetAtt: 
-                  - "cleanupBucketOnDeleteFunction"
-                  - "Arn"
-            BucketName: !Sub '${accesslogbucket.Arn}'
+    # cleanupBucketOnDelete:
+    #     DependsOn: cleanupBucketOnDeleteFunction
+    #     Type: Custom::cleanupbucket
+    #     Properties:
+    #         ServiceToken: 
+    #             Fn::GetAtt: 
+    #               - "cleanupBucketOnDeleteFunction"
+    #               - "Arn"
+    #         BucketName: !Sub '${accesslogbucket.Arn}'
 
-    cleanupBucketOnDeleteFunction:
-        DependsOn: accesslogbucket
-        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-        Properties:
-            Role: !GetAtt cleanupBucketOnDeleteLambdaRole.Arn
-            CodeUri: cleanupBucketOnDelete/
-            Handler: cleanupBucketOnDelete.lambda_handler
-            Runtime: python3.7
-            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
-                Variables:
-                    s3_bucket_name: !Ref accesslogbucket
-            Timeout: 300
-            Description: cleanup Bucket on Delete Lambda Lambda function.
+    # cleanupBucketOnDeleteFunction:
+    #     DependsOn: accesslogbucket
+    #     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    #     Properties:
+    #         Role: !GetAtt cleanupBucketOnDeleteLambdaRole.Arn
+    #         CodeUri: cleanupBucketOnDelete/
+    #         Handler: cleanupBucketOnDelete.lambda_handler
+    #         Runtime: python3.7
+    #         Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+    #             Variables:
+    #                 s3_bucket_name: !Ref accesslogbucket
+    #         Timeout: 300
+    #         Description: cleanup Bucket on Delete Lambda Lambda function.
 
-    cleanupBucketOnDeleteLambdaRole:
-        Type: AWS::IAM::Role
-        Properties:
-            AssumeRolePolicyDocument:
-                Version: '2012-10-17'
-                Statement:
-                    - Action: ['sts:AssumeRole']
-                      Effect: Allow
-                      Principal:
-                        Service: [lambda.amazonaws.com]
+    # cleanupBucketOnDeleteLambdaRole:
+    #     Type: AWS::IAM::Role
+    #     Properties:
+    #         AssumeRolePolicyDocument:
+    #             Version: '2012-10-17'
+    #             Statement:
+    #                 - Action: ['sts:AssumeRole']
+    #                   Effect: Allow
+    #                   Principal:
+    #                     Service: [lambda.amazonaws.com]
 
-    cleanupBucketOnDeleteLambdaRolePolicy: 
-        Type: "AWS::IAM::Policy"
-        Properties: 
-            PolicyName: !Sub "${AWS::StackName}-cleanupBucketOnDeleteLambdaRolePolicy"
-            PolicyDocument: 
-                Version: "2012-10-17"
-                Statement: 
-                    - Effect: "Allow"
-                      Action: 
-                            - "s3:*"
-                            - "logs:*"
-                      Resource: "*"
-                    - Effect: "Deny"
-                      Action: 
-                            - "s3:DeleteBucket"
-                      Resource: "*"
-            Roles: 
-                - Ref: "cleanupBucketOnDeleteLambdaRole"
+    # cleanupBucketOnDeleteLambdaRolePolicy: 
+    #     Type: "AWS::IAM::Policy"
+    #     Properties: 
+    #         PolicyName: !Sub "${AWS::StackName}-cleanupBucketOnDeleteLambdaRolePolicy"
+    #         PolicyDocument: 
+    #             Version: "2012-10-17"
+    #             Statement: 
+    #                 - Effect: "Allow"
+    #                   Action: 
+    #                         - "s3:*"
+    #                         - "logs:*"
+    #                   Resource: "*"
+    #                 - Effect: "Deny"
+    #                   Action: 
+    #                         - "s3:DeleteBucket"
+    #                   Resource: "*"
+    #         Roles: 
+    #             - Ref: "cleanupBucketOnDeleteLambdaRole"
 
 
     
