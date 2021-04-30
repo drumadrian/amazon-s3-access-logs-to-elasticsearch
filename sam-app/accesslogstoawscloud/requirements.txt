@@ -12,6 +12,6 @@ requests==2.22.0
 s3-log-parse==0.1.1
 s3transfer==0.2.1
 six==1.13.0
-urllib3==1.25.7
+urllib3==1.25.8
 aws-xray-sdk==2.4.3
 requests-aws4auth==0.9
